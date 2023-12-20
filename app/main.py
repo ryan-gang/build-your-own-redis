@@ -1,10 +1,13 @@
 import asyncio
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
 
+from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, actively_expire_keys,
+                        check_key_expiration, get_expiry_timestamp)
 from app.resp import RESPReader, RESPWriter
 
 HOST, PORT = "127.0.0.1", 6379
-DATASTORE: dict[str, str] = {}
+ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
+DATASTORE: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
 
 
 async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
@@ -25,12 +28,15 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await writer.write_bulk_string(response)
             case "SET":
                 key, value = msg[1], msg[2]
-                DATASTORE[key] = value
+                DATASTORE[key] = (value, get_expiry_timestamp(msg))
                 await writer.write_simple_string("OK")
             case "GET":
                 key = msg[1]
-                default_value = None
-                value = DATASTORE.get(key, default_value)
+                default_value = (None, EXPIRY_TIMESTAMP_DEFAULT_VAL)
+                value, expiry_timestamp = DATASTORE.get(key, default_value)
+                expired = check_key_expiration(DATASTORE, key, expiry_timestamp)
+                if expired:
+                    value = None
                 await writer.write_bulk_string(value)
             case _:
                 raise RuntimeError(f"Unknown command received : {command}")
@@ -46,5 +52,8 @@ async def main():
 if __name__ == "__main__":
     try:
         asyncio.run(main())
+        asyncio.create_task(
+            actively_expire_keys(DATASTORE, ACTIVE_KEY_EXPIRY_TIME_WINDOW)
+        )
     except KeyboardInterrupt:
         print("Interrupted, shutting down.")
