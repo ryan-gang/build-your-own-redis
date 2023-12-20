@@ -55,7 +55,7 @@ class RESPReader(object):
 
     async def read_bulk_string(self) -> Optional[str]:
         metadata = await self.read_line()
-        print(metadata)
+        # print(metadata)
         length = int(metadata)
         if length == -1:
             return None
@@ -67,12 +67,12 @@ class RESPReader(object):
 
     async def read_line(self) -> str:
         data = await self.reader.readuntil(b"\r\n")
-        print(data)
+        # print(data)
         return data[:-2].decode()
 
     async def read_until(self, n: int) -> str:
         data = await self.reader.readexactly(n)
-        print(data)
+        # print(data)
         return data[:-2].decode()
 
 
