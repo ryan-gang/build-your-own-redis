@@ -80,27 +80,60 @@ class RESPWriter(object):
     def __init__(self, writer: StreamWriter):
         self.writer = writer
 
-    async def write_simple_string(self, data: str):
+    async def serialize_array(self, arr: list[Any]) -> str:
+        MSG_CODE, DELIMITER = "*", "\r\n"
+        response = ""
+        response += MSG_CODE + str(len(arr)) + DELIMITER
+        for obj in arr:
+            if type(obj) is str:
+                response += await self.serialize_bulk_string(obj)
+            elif type(obj) is int:
+                response += await self.serialize_integer(obj)
+            elif type(obj) is list:
+                response += await self.serialize_array(obj)
+        return response
+
+    async def serialize_simple_string(self, data: str) -> str:
         MSG_CODE, DELIMITER = "+", "\r\n"
         message = MSG_CODE + data + DELIMITER
-        await self.write(message)
+        return message
 
-    async def write_simple_error(self, data: str):
+    async def serialize_simple_error(self, data: str) -> str:
         MSG_CODE, DELIMITER = "-", "\r\n"
         message = MSG_CODE + data + DELIMITER
-        await self.write(message)
+        return message
 
-    async def write_integer(self, data: int):
+    async def serialize_integer(self, data: int) -> str:
         MSG_CODE, DELIMITER = ":", "\r\n"
         message = MSG_CODE + str(data) + DELIMITER
-        await self.write(message)
+        return message
 
-    async def write_bulk_string(self, data: Optional[str]):
+    async def serialize_bulk_string(self, data: Optional[str]) -> str:
         MSG_CODE, DELIMITER = "$", "\r\n"
         if not data:  # Null bulk strings
             message = "$-1\r\n"
         else:
             message = MSG_CODE + str(len(data)) + DELIMITER + data + DELIMITER
+        return message
+
+    async def write_array(self, arr: list[Any]):
+        message = await self.serialize_array(arr)
+        await self.write(message)
+
+    async def write_simple_string(self, data: str):
+        message = await self.serialize_simple_string(data)
+        await self.write(message)
+
+    async def write_simple_error(self, data: str):
+        message = await self.serialize_simple_error(data)
+        await self.write(message)
+
+    async def write_integer(self, data: int):
+        message = await self.serialize_integer(data)
+        await self.write(message)
+
+    async def write_bulk_string(self, data: Optional[str]):
+        message = await self.serialize_bulk_string(data)
         await self.write(message)
 
     async def write(self, message: str):

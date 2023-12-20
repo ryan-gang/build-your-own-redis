@@ -1,13 +1,16 @@
+import argparse
 import asyncio
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
 
-from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, actively_expire_keys,
-                        check_key_expiration, get_expiry_timestamp)
+from app.commands import (handle_config_get, handle_echo, handle_get,
+                          handle_ping, handle_set)
+from app.expiry import actively_expire_keys
 from app.resp import RESPReader, RESPWriter
 
 HOST, PORT = "127.0.0.1", 6379
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
 DATASTORE: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
+CONFIG: dict[str, str] = {}
 
 
 async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
@@ -21,28 +24,32 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
         command = msg[0].upper()
         match command:
             case "PING":
-                response = "PONG"
-                await writer.write_simple_string(response)
+                await handle_ping(writer)
             case "ECHO":
-                response = msg[1]
-                await writer.write_bulk_string(response)
+                await handle_echo(writer, msg)
             case "SET":
-                key, value = msg[1], msg[2]
-                DATASTORE[key] = (value, get_expiry_timestamp(msg))
-                await writer.write_simple_string("OK")
+                await handle_set(writer, msg, DATASTORE)
             case "GET":
-                key = msg[1]
-                default_value = (None, EXPIRY_TIMESTAMP_DEFAULT_VAL)
-                value, expiry_timestamp = DATASTORE.get(key, default_value)
-                expired = check_key_expiration(DATASTORE, key, expiry_timestamp)
-                if expired:
-                    value = None
-                await writer.write_bulk_string(value)
+                await handle_get(writer, msg, DATASTORE)
+            case "CONFIG":
+                await handle_config_get(writer, msg, CONFIG)
             case _:
                 raise RuntimeError(f"Unknown command received : {command}")
 
 
 async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--dir", type=str, help="The directory where RDB files are stored"
+    )
+    parser.add_argument("--dbfilename", type=str, help="The name of the RDB file")
+    args = parser.parse_args()
+
+    if args.dir:
+        CONFIG["dir"] = args.dir
+    if args.dbfilename:
+        CONFIG["dbfilename"] = args.dbfilename
+
     server = await asyncio.start_server(handler, HOST, PORT, reuse_port=False)
     print(f"Started Redis server @ {HOST}:{PORT}")
     async with server:
