@@ -10,17 +10,30 @@ from app.resp import RESPReader, RESPWriter
 HOST, PORT = "127.0.0.1", 6379
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
 DATASTORE: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
-CONFIG: dict[str, str] = {}
+# Main Datastore, All SET, GET data is stored in this global dict.
+CONFIG: dict[str, str] = {}  # key -> value (Redis config parameters)
 
 
 async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
+    """
+    Handles incoming RESP commands from Redis clients and interacts with the
+    application logic. This asynchronous function continuously performs the
+    following tasks in a loop:
+    * Reads a single RESP message from the `stream_reader` using the
+      `RESPReader`.
+    * Handles potential read errors by closing the connection and returning.
+    * Extracts the first element of the parsed message as the command name
+      (converted to uppercase).
+    * Matches the command name to known handlers, and executes the handler
+      function to perform the required operation.
+    """
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-    while 1:
+    while not stream_reader.at_eof():
         try:
             msg = await reader.read_message()
-        except IncompleteReadError:
+        except (IncompleteReadError, ConnectionResetError):
+            await writer.close()
             return
-        print(msg)
         command = msg[0].upper()
         match command:
             case "PING":
