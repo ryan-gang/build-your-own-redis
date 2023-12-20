@@ -4,6 +4,7 @@ from asyncio import IncompleteReadError, StreamReader, StreamWriter
 from app.resp import RESPReader, RESPWriter
 
 HOST, PORT = "127.0.0.1", 6379
+DATASTORE: dict[str, str] = {}
 
 
 async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
@@ -22,6 +23,15 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
             case "ECHO":
                 response = msg[1]
                 await writer.write_bulk_string(response)
+            case "SET":
+                key, value = msg[1], msg[2]
+                DATASTORE[key] = value
+                await writer.write_simple_string("OK")
+            case "GET":
+                key = msg[1]
+                default_value = None
+                value = DATASTORE.get(key, default_value)
+                await writer.write_bulk_string(value)
             case _:
                 raise RuntimeError(f"Unknown command received : {command}")
 
