@@ -30,6 +30,13 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
       function to perform the required operation.
     """
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
+    if rdb_parser_required:
+        try:
+            rdb_parser = RDBParser(rdb_file_path)
+            global DATASTORE
+            DATASTORE |= rdb_parser.kv
+        except FileNotFoundError:
+            pass
     while not stream_reader.at_eof():
         try:
             msg = await reader.read_message()
@@ -50,8 +57,7 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
             case "CONFIG":
                 await handle_config_get(writer, msg, CONFIG)
             case "KEYS":
-                rdb_parser = RDBParser(rdb_file_path)
-                await handle_list_keys(writer, msg, rdb_parser.kv)
+                await handle_list_keys(writer, msg, DATASTORE)
             case _:
                 raise RuntimeError(f"Unknown command received : {command}")
 
@@ -65,10 +71,13 @@ async def main():
     args = parser.parse_args()
 
     if args.dir and args.dbfilename:
+        global rdb_file_path, rdb_parser_required
         CONFIG["dir"] = dir = str(args.dir)
         CONFIG["dbfilename"] = filename = str(args.dbfilename)
-        global rdb_file_path
+        rdb_parser_required = True
         rdb_file_path = os.path.join(dir, filename)
+    else:
+        rdb_parser_required = False
 
     server = await asyncio.start_server(handler, HOST, PORT, reuse_port=False)
     print(f"Started Redis server @ {HOST}:{PORT}")
