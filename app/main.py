@@ -1,10 +1,12 @@
 import argparse
 import asyncio
+import os
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
 
 from app.commands import (handle_config_get, handle_echo, handle_get,
-                          handle_ping, handle_set)
+                          handle_list_keys, handle_ping, handle_set)
 from app.expiry import actively_expire_keys
+from app.rdb import RDBParser
 from app.resp import RESPReader, RESPWriter
 
 HOST, PORT = "127.0.0.1", 6379
@@ -31,6 +33,7 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
     while not stream_reader.at_eof():
         try:
             msg = await reader.read_message()
+            print(msg)
         except (IncompleteReadError, ConnectionResetError):
             await writer.close()
             return
@@ -46,6 +49,9 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_get(writer, msg, DATASTORE)
             case "CONFIG":
                 await handle_config_get(writer, msg, CONFIG)
+            case "KEYS":
+                rdb_parser = RDBParser(rdb_file_path)
+                await handle_list_keys(writer, msg, rdb_parser.kv)
             case _:
                 raise RuntimeError(f"Unknown command received : {command}")
 
@@ -58,10 +64,11 @@ async def main():
     parser.add_argument("--dbfilename", type=str, help="The name of the RDB file")
     args = parser.parse_args()
 
-    if args.dir:
-        CONFIG["dir"] = args.dir
-    if args.dbfilename:
-        CONFIG["dbfilename"] = args.dbfilename
+    if args.dir and args.dbfilename:
+        CONFIG["dir"] = dir = str(args.dir)
+        CONFIG["dbfilename"] = filename = str(args.dbfilename)
+        global rdb_file_path
+        rdb_file_path = os.path.join(dir, filename)
 
     server = await asyncio.start_server(handler, HOST, PORT, reuse_port=False)
     print(f"Started Redis server @ {HOST}:{PORT}")

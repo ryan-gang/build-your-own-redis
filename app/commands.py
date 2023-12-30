@@ -80,3 +80,12 @@ async def handle_config_get(writer: RESPWriter, msg: list[str], CONFIG: dict[str
     key = msg[2]
     value = CONFIG.get(key, None)
     await writer.write_array([key, value])
+
+
+async def handle_list_keys(
+    writer: RESPWriter, msg: list[str], DATASTORE: dict[str, tuple[str, int]]
+):
+    key = msg[1]
+    assert key == "*"
+    key_list = list(DATASTORE.keys())
+    await writer.write_array(key_list)
