@@ -1,5 +1,11 @@
-from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
-                        get_expiry_timestamp)
+import os
+
+from app.expiry import (
+    EXPIRY_TIMESTAMP_DEFAULT_VAL,
+    check_key_expiration,
+    get_expiry_timestamp,
+)
+from app.rdb import RDBParser
 from app.resp import RESPWriter
 
 
@@ -85,7 +91,27 @@ async def handle_config_get(writer: RESPWriter, msg: list[str], CONFIG: dict[str
 async def handle_list_keys(
     writer: RESPWriter, msg: list[str], DATASTORE: dict[str, tuple[str, int]]
 ):
+    """
+    Handles the KEYS * command from the Redis client.
+
+    This function retrieves the list of all keys from the DATASTORE and sends it
+    back to the client as an RESP array.
+    """
     key = msg[1]
     assert key == "*"
     key_list = list(DATASTORE.keys())
     await writer.write_array(key_list)
+
+
+def init_rdb_parser(
+    parsing_reqd_flag: bool, rdb_file_path: str
+) -> dict[str, tuple[str, int]]:
+    """
+    Simple utility function that only parses the .rdb file if parsing_reqd_flag
+    is set, and if the file exists. Returns the parsed key-value store, or an
+    empty dict.
+    """
+    if parsing_reqd_flag and os.path.isfile(rdb_file_path):
+        parser = RDBParser(rdb_file_path)
+        return parser.kv
+    return {}

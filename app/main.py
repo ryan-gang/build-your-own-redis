@@ -4,9 +4,9 @@ import os
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
 
 from app.commands import (handle_config_get, handle_echo, handle_get,
-                          handle_list_keys, handle_ping, handle_set)
+                          handle_list_keys, handle_ping, handle_set,
+                          init_rdb_parser)
 from app.expiry import actively_expire_keys
-from app.rdb import RDBParser
 from app.resp import RESPReader, RESPWriter
 
 HOST, PORT = "127.0.0.1", 6379
@@ -30,18 +30,18 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
       function to perform the required operation.
     """
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-    if rdb_parser_required:
-        try:
-            rdb_parser = RDBParser(rdb_file_path)
-            global DATASTORE
-            DATASTORE |= rdb_parser.kv
-        except FileNotFoundError:
-            pass
+
+    kv_store = init_rdb_parser(rdb_parser_required, rdb_file_path)
+    global DATASTORE
+    DATASTORE |= kv_store
+    # Union the parsed kv-store from the rdb file with our internal DATSTORE
+
     while not stream_reader.at_eof():
         try:
             msg = await reader.read_message()
             print(msg)
-        except (IncompleteReadError, ConnectionResetError):
+        except (IncompleteReadError, ConnectionResetError) as err:
+            print(err)
             await writer.close()
             return
         command = msg[0].upper()
@@ -59,7 +59,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
             case "KEYS":
                 await handle_list_keys(writer, msg, DATASTORE)
             case _:
-                raise RuntimeError(f"Unknown command received : {command}")
+                print(f"Unknown command received : {command}")
+                return
 
 
 async def main():
@@ -77,6 +78,7 @@ async def main():
         rdb_parser_required = True
         rdb_file_path = os.path.join(dir, filename)
     else:
+        rdb_file_path = ""
         rdb_parser_required = False
 
     server = await asyncio.start_server(handler, HOST, PORT, reuse_port=False)
