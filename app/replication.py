@@ -1,4 +1,4 @@
-from asyncio import StreamReader, StreamWriter, sleep, Lock
+from asyncio import StreamReader, StreamWriter, sleep
 from collections import deque
 
 from app.resp import RESPReader, RESPWriter
