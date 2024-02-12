@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import os
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
+from collections import deque
 
 from app.commands import (
     handle_config_get,
@@ -14,12 +15,12 @@ from app.commands import (
     handle_rdb_transfer,
     handle_replconf,
     handle_set,
+    handle_wait,
     init_rdb_parser,
 )
 from app.expiry import actively_expire_keys, get_expiry_timestamp
 from app.replication import propagate_commands
 from app.resp import RESPReader, RESPWriter
-from collections import deque
 
 role = "master"
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
@@ -82,6 +83,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_psync(writer, msg)
                 await handle_rdb_transfer(writer, msg)
                 replicas.append((reader, writer))
+            case "WAIT":
+                await handle_wait(writer, len(replicas))
             case _:
                 print(f"Unknown command received : {command}")
                 return
