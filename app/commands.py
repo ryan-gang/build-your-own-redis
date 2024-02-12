@@ -10,7 +10,7 @@ from app.expiry import (
 )
 from app.rdb import RDBParser
 from app.resp import RESPReader, RESPWriter
-
+import asyncio
 
 async def handle_ping(writer: RESPWriter):
     """
@@ -154,12 +154,33 @@ async def handle_rdb_transfer(writer: RESPWriter, msg: list[str]):
     await writer.write_raw(message)
 
 
-async def handle_wait(writer: RESPWriter, replicas: list[tuple[RESPReader, RESPWriter]]):
+async def handle_wait(
+    writer: RESPWriter,
+    replicas: list[tuple[RESPReader, RESPWriter]],
+    master_offset: int,
+):
     """
     Handles the WAIT command from the Redis client.
     """
-    await writer.write_integer(len(replicas))
+    updated_replicas = 0
+    await asyncio.sleep(0.125)
+    if master_offset > 0:
+        for repl_reader, repl_writer in replicas:
+            await repl_writer.write_array(["REPLCONF", "GETACK", "*"])
+            # response = await repl_reader.read_array()
+            try:
+                response = await asyncio.wait_for(repl_reader.read_array(), timeout=1.0)
+                print("response", response)
+                if response[0] == "REPLCONF" and response[1] == "ACK":
+                    repl_offset = response[2]
+                    if repl_offset >= master_offset:
+                        updated_replicas += 1
+            except asyncio.TimeoutError:
+                print('Timeout expired. No data received.')
 
+        await writer.write_integer(updated_replicas)
+    else:
+        await writer.write_integer(len(replicas))
 
 def init_rdb_parser(
     parsing_reqd_flag: bool, rdb_file_path: str
