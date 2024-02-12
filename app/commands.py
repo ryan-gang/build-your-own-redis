@@ -5,8 +5,11 @@ import random
 import string
 import time
 
-from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
-                        get_expiry_timestamp)
+from app.expiry import (
+    EXPIRY_TIMESTAMP_DEFAULT_VAL,
+    check_key_expiration,
+    get_expiry_timestamp,
+)
 from app.rdb import RDBParser
 from app.resp import RESPReader, RESPWriter
 
@@ -176,7 +179,6 @@ async def handle_wait(
 
         for repl_reader, repl_writer in replicas:
             try:
-                # response = await repl_reader.read_array()
                 response = await asyncio.wait_for(
                     repl_reader.read_array(skip_first_byte=True), timeout=0.125
                 )
@@ -196,7 +198,7 @@ async def handle_wait(
     if response < num_replicas and master_offset != 0:
         t = max(0, timeout - elapsed_time)
         print(f"Waiting for {t} ms.")
-        await asyncio.sleep(t)
+        await asyncio.sleep(t / 1000)
     await writer.write_integer(response)
     return
 
