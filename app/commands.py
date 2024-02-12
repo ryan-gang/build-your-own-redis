@@ -154,6 +154,13 @@ async def handle_rdb_transfer(writer: RESPWriter, msg: list[str]):
     await writer.write_raw(message)
 
 
+async def handle_wait(writer: RESPWriter, replicas: int):
+    """
+    Handles the WAIT command from the Redis client.
+    """
+    await writer.write_integer(replicas)
+
+
 def init_rdb_parser(
     parsing_reqd_flag: bool, rdb_file_path: str
 ) -> dict[str, tuple[str, int]]:
