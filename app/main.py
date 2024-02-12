@@ -10,6 +10,8 @@ from app.commands import (
     handle_info,
     handle_list_keys,
     handle_ping,
+    handle_psync,
+    handle_rdb_transfer,
     handle_replconf,
     handle_set,
     init_rdb_parser,
@@ -71,6 +73,9 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_info(writer, msg, role)
             case "REPLCONF":
                 await handle_replconf(writer, msg)
+            case "PSYNC":
+                await handle_psync(writer, msg)
+                # await handle_rdb_transfer(writer, msg)
             case _:
                 print(f"Unknown command received : {command}")
                 return
