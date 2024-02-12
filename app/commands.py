@@ -9,7 +9,7 @@ from app.expiry import (
     get_expiry_timestamp,
 )
 from app.rdb import RDBParser
-from app.resp import RESPWriter
+from app.resp import RESPReader, RESPWriter
 
 
 async def handle_ping(writer: RESPWriter):
@@ -154,11 +154,11 @@ async def handle_rdb_transfer(writer: RESPWriter, msg: list[str]):
     await writer.write_raw(message)
 
 
-async def handle_wait(writer: RESPWriter, replicas: int):
+async def handle_wait(writer: RESPWriter, replicas: list[tuple[RESPReader, RESPWriter]]):
     """
     Handles the WAIT command from the Redis client.
     """
-    await writer.write_integer(replicas)
+    await writer.write_integer(len(replicas))
 
 
 def init_rdb_parser(
