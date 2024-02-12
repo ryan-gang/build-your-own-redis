@@ -44,11 +44,13 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
       function to perform the required operation.
     """
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
+    replication_offset: int = 0
 
     kv_store = init_rdb_parser(rdb_parser_required, rdb_file_path)
     global datastore
     datastore |= kv_store
     # Union the parsed kv-store from the rdb file with our internal DATSTORE
+    lock = asyncio.Lock()
 
     while not stream_reader.at_eof():
         try:
@@ -67,6 +69,7 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
             case "SET":
                 await handle_set(writer, msg, datastore)
                 resp = await writer.serialize_array(msg)
+                replication_offset += reader.get_byte_offset(msg)
                 replication_buffer.append(resp)
             case "GET":
                 await handle_get(writer, msg, datastore)
@@ -82,8 +85,10 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_psync(writer, msg)
                 await handle_rdb_transfer(writer, msg)
                 replicas.append((reader, writer))
+                return
             case "WAIT":
-                await handle_wait(writer, replicas)
+                async with lock:
+                    await handle_wait(writer, replicas, replication_offset, msg)
             case _:
                 print(f"Unknown command received : {command}")
                 return
