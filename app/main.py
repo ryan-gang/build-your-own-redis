@@ -15,6 +15,7 @@ from app.commands import (
 )
 from app.expiry import actively_expire_keys
 from app.resp import RESPReader, RESPWriter
+from app.replication import replication_handshake
 
 role = "master"
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
@@ -81,7 +82,7 @@ async def main():
     parser.add_argument(
         "--port", type=str, help="The port to which this instance will bind"
     )
-    parser.add_argument("--replicaof", nargs=2, help='Specify the host and port')
+    parser.add_argument("--replicaof", nargs=2, help="Specify the host and port")
 
     args = parser.parse_args()
 
@@ -98,14 +99,17 @@ async def main():
     host, port = "127.0.0.1", 6379
     if args.port:
         port = int(args.port)
-    
+
     if args.replicaof:
         global role
         role = "slave"
         master_host, master_port = args.replicaof
+        reader, writer = await asyncio.open_connection(master_host, master_port)
+        asyncio.create_task(replication_handshake(reader, writer))
 
     server = await asyncio.start_server(handler, host, port, reuse_port=False)
     print(f"Started Redis server @ {host}:{port}")
+
     async with server:
         await server.serve_forever()
 
