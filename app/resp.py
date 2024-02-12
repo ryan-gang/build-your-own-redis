@@ -19,6 +19,18 @@ class RESPReader(object):
         """
         self.reader = reader
 
+    def get_byte_offset(self, message: list[str]) -> int:
+        # Returns the byte offset for a RESP command
+        # To be used only with RESP Arrays
+        offset = 0
+        offset += 2 * (2 * len(message) + 1)
+        offset += len(str(len(message))) + 1
+        for _, val in enumerate(message):
+            msg_len = len(val)
+            offset += len(str(msg_len)) + 1
+            offset += msg_len
+        return offset
+
     async def read_message(self) -> Any:
         """
         Reads and parses a single RESP message from the underlying stream.
@@ -140,6 +152,23 @@ class RESPReader(object):
         """
         data = await self.reader.readexactly(n)
         return data[:-2].decode()
+
+    async def read_rdb(self) -> bytes:
+        """
+        Reads a specific number of bytes from the stream.
+
+        This method directly calls the `readexactly` method of the underlying
+        stream reader and expects an exact number of bytes (`n`) to be provided.
+        It then trims the trailing newline characters (`\r\n`) and decodes the
+        remaining bytes using the default encoding.
+        """
+        _ = await self.reader.readexactly(1)
+        l = await self.read_line()
+        length = int(l)
+        if length == -1:
+            return b""
+        data = await self.reader.readexactly(length)
+        return data
 
 
 class RESPWriter(object):
@@ -265,10 +294,9 @@ class RESPWriter(object):
         """
         self.writer.write(message.encode())
         await self.writer.drain()
-    
+
     async def write_raw(self, message: bytes):
-        """
-        """
+        """ """
         self.writer.write(message)
         await self.writer.drain()
 
