@@ -3,13 +3,18 @@ import asyncio
 import os
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
 
-from app.commands import (handle_config_get, handle_echo, handle_get,
-                          handle_list_keys, handle_ping, handle_set,
-                          init_rdb_parser)
+from app.commands import (
+    handle_config_get,
+    handle_echo,
+    handle_get,
+    handle_list_keys,
+    handle_ping,
+    handle_set,
+    init_rdb_parser,
+)
 from app.expiry import actively_expire_keys
 from app.resp import RESPReader, RESPWriter
 
-HOST, PORT = "127.0.0.1", 6379
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
 DATASTORE: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
 # Main Datastore, All SET, GET data is stored in this global dict.
@@ -69,6 +74,10 @@ async def main():
         "--dir", type=str, help="The directory where RDB files are stored"
     )
     parser.add_argument("--dbfilename", type=str, help="The name of the RDB file")
+    parser.add_argument(
+        "--port", type=str, help="The port to which this instance will bind"
+    )
+
     args = parser.parse_args()
 
     if args.dir and args.dbfilename:
@@ -81,8 +90,12 @@ async def main():
         rdb_file_path = ""
         rdb_parser_required = False
 
-    server = await asyncio.start_server(handler, HOST, PORT, reuse_port=False)
-    print(f"Started Redis server @ {HOST}:{PORT}")
+    host, port = "127.0.0.1", 6379
+    if args.port:
+        port = int(args.port)
+
+    server = await asyncio.start_server(handler, host, port, reuse_port=False)
+    print(f"Started Redis server @ {host}:{port}")
     async with server:
         await server.serve_forever()
 
