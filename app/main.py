@@ -16,7 +16,7 @@ from app.commands import (
     handle_set,
     init_rdb_parser,
 )
-from app.expiry import actively_expire_keys
+from app.expiry import actively_expire_keys, expiry_timestamp
 from app.replication import replication_handshake, propagate_commands
 from app.resp import RESPReader, RESPWriter
 from collections import deque
@@ -91,11 +91,33 @@ async def process_commands(
     stream_reader: StreamReader,
     stream_writer: StreamWriter,
 ):
+    WAIT_TIME = 0.5  # seconds
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-    WAIT_TIME = 2  # seconds
+
+    ping = ["PING"]
+    await writer.write_array(ping)
+    data = await reader.read_simple_string()
+    print(data)
+
+    replconf = ["REPLCONF", "listening-port", "6380"]
+    await writer.write_array(replconf)
+    data = await reader.read_simple_string()
+    print(data)
+
+    replconf_capa = ["REPLCONF", "capa", "psync2", "capa", "psync2"]
+    await writer.write_array(replconf_capa)
+    data = await reader.read_simple_string()
+    print(data)
+
+    replconf_capa = ["PSYNC", "?", "-1"]
+    await writer.write_array(replconf_capa)
+    data = await reader.read_simple_string()
+    print(data)
+
+    rdb = await reader.read_rdb()
+    print(rdb)
 
     while True:
-        await asyncio.sleep(WAIT_TIME)
         try:
             msg = await reader.read_message()
             print("Received from master :", msg)
@@ -107,9 +129,10 @@ async def process_commands(
         match command:
             case "SET":
                 key, value = msg[1], msg[2]
-                DATASTORE[key] = value  # No active expiry
+                DATASTORE[key] = (value, get_expiry_timestamp([]))  # No active expiry
             case _:
                 pass
+        await asyncio.sleep(WAIT_TIME)
 
 
 
@@ -140,12 +163,15 @@ async def main():
     if args.port:
         port = int(args.port)
 
+
     if args.replicaof:
         global role
         role = "slave"
         master_host, master_port = args.replicaof
         reader, writer = await asyncio.open_connection(master_host, master_port)
-        asyncio.create_task(replication_handshake(reader, writer))
+
+        # lock = asyncio.Lock()
+        # asyncio.create_task(replication_handshake(reader, writer, lock))
         asyncio.create_task(process_commands(reader, writer))
     else:
         asyncio.create_task(propagate_commands(replication_buffer, replicas))
