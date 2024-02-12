@@ -1,16 +1,15 @@
+import asyncio
+import binascii
 import os
 import random
 import string
-import binascii
 import time
-from app.expiry import (
-    EXPIRY_TIMESTAMP_DEFAULT_VAL,
-    check_key_expiration,
-    get_expiry_timestamp,
-)
+
+from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
+                        get_expiry_timestamp)
 from app.rdb import RDBParser
 from app.resp import RESPReader, RESPWriter
-import asyncio
+
 
 async def handle_ping(writer: RESPWriter):
     """
@@ -158,7 +157,7 @@ async def handle_wait(
     writer: RESPWriter,
     replicas: list[tuple[RESPReader, RESPWriter]],
     master_offset: int,
-    msg: list[str]
+    msg: list[str],
 ):
     """
     Handles the WAIT command from the Redis client.
@@ -169,23 +168,27 @@ async def handle_wait(
     await asyncio.sleep(0.125)
     num_replicas, timeout = int(msg[1]), int(msg[2])
 
-    if master_offset > 0:
+    if master_offset == 0:
+        response = len(replicas)
+    else:
         for repl_reader, repl_writer in replicas:
             await repl_writer.write_array(["REPLCONF", "GETACK", "*"])
-            # response = await repl_reader.read_array()
+
+        for repl_reader, repl_writer in replicas:
             try:
-                response = await asyncio.wait_for(repl_reader.read_array(skip_first_byte=True), timeout=0.5)
+                # response = await repl_reader.read_array()
+                response = await asyncio.wait_for(
+                    repl_reader.read_array(skip_first_byte=True), timeout=0.125
+                )
                 print("response", response)
                 if response[0] == "REPLCONF" and response[1] == "ACK":
                     repl_offset = int(response[2])
                     if repl_offset >= master_offset:
                         updated_replicas += 1
             except asyncio.TimeoutError:
-                print('Timeout expired. No data received.')
+                print("Timeout expired. No data received.")
 
-        response = (updated_replicas)
-    else:
-        response = (len(replicas))
+        response = updated_replicas
 
     end_time = time.time()
     elapsed_time = (end_time - start_time) * 1000
@@ -196,6 +199,7 @@ async def handle_wait(
         await asyncio.sleep(t)
     await writer.write_integer(response)
     return
+
 
 def init_rdb_parser(
     parsing_reqd_flag: bool, rdb_file_path: str

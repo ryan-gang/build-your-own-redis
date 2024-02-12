@@ -4,20 +4,10 @@ import os
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
 from collections import deque
 
-from app.commands import (
-    handle_config_get,
-    handle_echo,
-    handle_get,
-    handle_info,
-    handle_list_keys,
-    handle_ping,
-    handle_psync,
-    handle_rdb_transfer,
-    handle_replconf,
-    handle_set,
-    handle_wait,
-    init_rdb_parser,
-)
+from app.commands import (handle_config_get, handle_echo, handle_get,
+                          handle_info, handle_list_keys, handle_ping,
+                          handle_psync, handle_rdb_transfer, handle_replconf,
+                          handle_set, handle_wait, init_rdb_parser)
 from app.expiry import actively_expire_keys
 from app.replication import datastore, propagate_commands, replica_tasks
 from app.resp import RESPReader, RESPWriter

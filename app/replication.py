@@ -1,16 +1,14 @@
-from asyncio import StreamReader, StreamWriter, sleep, IncompleteReadError
+from asyncio import IncompleteReadError, StreamReader, StreamWriter, sleep
 from collections import deque
+
 from app.expiry import get_expiry_timestamp
 from app.resp import RESPReader, RESPWriter
 
-
 datastore: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
 
-async def replication_handshake(
-    reader: RESPReader, writer: RESPWriter
-):
-    """
-    """
+
+async def replication_handshake(reader: RESPReader, writer: RESPWriter):
+    """ """
     ping = ["PING"]
     await writer.write_array(ping)
     data = await reader.read_simple_string()
