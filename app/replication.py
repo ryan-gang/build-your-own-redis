@@ -1,15 +1,13 @@
-from asyncio import StreamReader, StreamWriter, sleep
+from asyncio import StreamReader, StreamWriter, sleep, IncompleteReadError
 from collections import deque
-
+from app.expiry import get_expiry_timestamp
 from app.resp import RESPReader, RESPWriter
 
 
 async def replication_handshake(
-    stream_reader: StreamReader, stream_writer: StreamWriter
+    reader: RESPReader, writer: RESPWriter
 ):
     """ """
-    reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-
     ping = ["PING"]
     await writer.write_array(ping)
     data = await reader.read_simple_string()
@@ -34,13 +32,12 @@ async def replication_handshake(
     print(rdb)
 
     return
-    
 
 
 async def propagate_commands(
     replication_buffer: deque[str], replicas: list[tuple[RESPReader, RESPWriter]]
 ):
-    WAIT_TIME = 1  # seconds
+    WAIT_TIME = 0.125  # seconds
     while True:
         if len(replicas) != 0:
             if len(replication_buffer) != 0:
@@ -49,3 +46,35 @@ async def propagate_commands(
                     _, w = replica
                     await w.write(cmd)
         await sleep(WAIT_TIME)
+
+
+async def replica_tasks(
+    stream_reader: StreamReader,
+    stream_writer: StreamWriter,
+):
+    # replication_handshake + command_processing
+    reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
+    await replication_handshake(reader, writer)
+    global datastore
+    offset = 0  # Count of processed bytes
+    while True:
+        try:
+            msg = await reader.read_message()
+            print("Received from master :", msg)
+        except (IncompleteReadError, ConnectionResetError) as err:
+            print(err)
+            await writer.close()
+            return
+        command = msg[0].upper()
+        match command:
+            case "SET":
+                key, value = msg[1], msg[2]
+                datastore[key] = (value, get_expiry_timestamp([]))  # No active expiry
+            case "REPLCONF":
+                # Master won't send any other REPLCONF message apart from GETACK.
+                response = ["REPLCONF", "ACK", str(offset)]
+                await writer.write_array(response)
+            case _:
+                pass
+        bytes_to_process = reader.get_byte_offset(msg)
+        offset += bytes_to_process

@@ -2,6 +2,7 @@ import argparse
 import asyncio
 import os
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
+from collections import deque
 
 from app.commands import (
     handle_config_get,
@@ -14,16 +15,16 @@ from app.commands import (
     handle_rdb_transfer,
     handle_replconf,
     handle_set,
+    handle_wait,
     init_rdb_parser,
 )
-from app.expiry import actively_expire_keys, get_expiry_timestamp
-from app.replication import propagate_commands
+from app.expiry import actively_expire_keys
+from app.replication import propagate_commands, replica_tasks
 from app.resp import RESPReader, RESPWriter
-from collections import deque
 
 role = "master"
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
-DATASTORE: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
+datastore: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
 # Main Datastore, All SET, GET data is stored in this global dict.
 CONFIG: dict[str, str] = {}  # key -> value (Redis config parameters)
 replication_buffer: deque[str] = deque()
@@ -46,8 +47,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
 
     kv_store = init_rdb_parser(rdb_parser_required, rdb_file_path)
-    global DATASTORE
-    DATASTORE |= kv_store
+    global datastore
+    datastore |= kv_store
     # Union the parsed kv-store from the rdb file with our internal DATSTORE
 
     while not stream_reader.at_eof():
@@ -65,15 +66,15 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
             case "ECHO":
                 await handle_echo(writer, msg)
             case "SET":
-                await handle_set(writer, msg, DATASTORE)
+                await handle_set(writer, msg, datastore)
                 resp = await writer.serialize_array(msg)
                 replication_buffer.append(resp)
             case "GET":
-                await handle_get(writer, msg, DATASTORE)
+                await handle_get(writer, msg, datastore)
             case "CONFIG":
                 await handle_config_get(writer, msg, CONFIG)
             case "KEYS":
-                await handle_list_keys(writer, msg, DATASTORE)
+                await handle_list_keys(writer, msg, datastore)
             case "INFO":
                 await handle_info(writer, msg, role)
             case "REPLCONF":
@@ -82,64 +83,11 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_psync(writer, msg)
                 await handle_rdb_transfer(writer, msg)
                 replicas.append((reader, writer))
+            case "WAIT":
+                await handle_wait(writer, len(replicas))
             case _:
                 print(f"Unknown command received : {command}")
                 return
-
-
-async def replica_tasks(
-    stream_reader: StreamReader,
-    stream_writer: StreamWriter,
-):
-    # replication_handshake + command_processing
-    # WAIT_TIME = 0.25  # seconds
-    reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-
-    ping = ["PING"]
-    await writer.write_array(ping)
-    data = await reader.read_simple_string()
-    print(data)
-
-    replconf = ["REPLCONF", "listening-port", "6380"]
-    await writer.write_array(replconf)
-    data = await reader.read_simple_string()
-    print(data)
-
-    replconf_capa = ["REPLCONF", "capa", "psync2", "capa", "psync2"]
-    await writer.write_array(replconf_capa)
-    data = await reader.read_simple_string()
-    print(data)
-
-    replconf_capa = ["PSYNC", "?", "-1"]
-    await writer.write_array(replconf_capa)
-    data = await reader.read_simple_string()
-    print(data)
-
-    rdb = await reader.read_rdb()
-    print(rdb)
-
-    offset = 0  # Count of processed bytes
-    while True:
-        try:
-            msg = await reader.read_message()
-            print("Received from master :", msg)
-        except (IncompleteReadError, ConnectionResetError) as err:
-            print(err)
-            await writer.close()
-            return
-        command = msg[0].upper()
-        match command:
-            case "SET":
-                key, value = msg[1], msg[2]
-                DATASTORE[key] = (value, get_expiry_timestamp([]))  # No active expiry
-            case "REPLCONF":
-                # Master won't send any other REPLCONF message apart from GETACK.
-                response = ["REPLCONF", "ACK", str(offset)]
-                await writer.write_array(response)
-            case _:
-                pass
-        bytes_to_process = reader.get_byte_offset(msg)
-        offset += bytes_to_process
 
 
 async def main():
@@ -189,7 +137,7 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
         asyncio.create_task(
-            actively_expire_keys(DATASTORE, ACTIVE_KEY_EXPIRY_TIME_WINDOW)
+            actively_expire_keys(datastore, ACTIVE_KEY_EXPIRY_TIME_WINDOW)
         )
     except KeyboardInterrupt:
         print("Interrupted, shutting down.")
