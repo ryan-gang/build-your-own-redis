@@ -40,7 +40,7 @@ async def replication_handshake(
 async def propagate_commands(
     replication_buffer: deque[str], replicas: list[tuple[RESPReader, RESPWriter]]
 ):
-    WAIT_TIME = 1  # seconds
+    WAIT_TIME = 0.125  # seconds
     while True:
         if len(replicas) != 0:
             if len(replication_buffer) != 0:
