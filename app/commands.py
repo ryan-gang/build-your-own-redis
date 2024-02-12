@@ -1,4 +1,6 @@
 import os
+import random
+import string
 
 from app.expiry import (
     EXPIRY_TIMESTAMP_DEFAULT_VAL,
@@ -109,6 +111,10 @@ async def handle_info(writer: RESPWriter, msg: list[str], role: str):
     """
     header = f"# msg[1].capitalize()"
     response = f"{header}\nrole:{role}"
+    if role == "master":
+        response += f"\nmaster_replid:{generate_random_string(40)}"
+        response += f"\nmaster_repl_offset:0"
+
     await writer.write_bulk_string(response)
 
 
@@ -124,3 +130,9 @@ def init_rdb_parser(
         parser = RDBParser(rdb_file_path)
         return parser.kv
     return {}
+
+
+def generate_random_string(length: int) -> str:
+    letters_and_digits = string.ascii_lowercase + string.digits
+    result_str = "".join(random.choice(letters_and_digits) for _ in range(length))
+    return result_str
