@@ -92,10 +92,9 @@ async def process_commands(
     stream_writer: StreamWriter,
 ):
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-    WAIT_TIME = 2  # seconds
+    WAIT_TIME = 0.5  # seconds
 
     while True:
-        await asyncio.sleep(WAIT_TIME)
         try:
             msg = await reader.read_message()
             print("Received from master :", msg)
@@ -110,6 +109,7 @@ async def process_commands(
                 DATASTORE[key] = value  # No active expiry
             case _:
                 pass
+        await asyncio.sleep(WAIT_TIME)
 
 
 
