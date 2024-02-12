@@ -16,7 +16,7 @@ from app.commands import (
 from app.expiry import actively_expire_keys
 from app.resp import RESPReader, RESPWriter
 
-ROLE = "master"
+role = "master"
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
 DATASTORE: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
 # Main Datastore, All SET, GET data is stored in this global dict.
@@ -66,7 +66,7 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
             case "KEYS":
                 await handle_list_keys(writer, msg, DATASTORE)
             case "INFO":
-                await handle_info(writer, msg, ROLE)
+                await handle_info(writer, msg, role)
             case _:
                 print(f"Unknown command received : {command}")
                 return
@@ -81,6 +81,7 @@ async def main():
     parser.add_argument(
         "--port", type=str, help="The port to which this instance will bind"
     )
+    parser.add_argument("--replicaof", nargs=2, help='Specify the host and port')
 
     args = parser.parse_args()
 
@@ -97,6 +98,11 @@ async def main():
     host, port = "127.0.0.1", 6379
     if args.port:
         port = int(args.port)
+    
+    if args.replicaof:
+        global role
+        role = "slave"
+        master_host, master_port = args.replicaof
 
     server = await asyncio.start_server(handler, host, port, reuse_port=False)
     print(f"Started Redis server @ {host}:{port}")
