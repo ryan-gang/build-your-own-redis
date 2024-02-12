@@ -16,8 +16,8 @@ from app.commands import (
     handle_set,
     init_rdb_parser,
 )
-from app.expiry import actively_expire_keys
-from app.replication import replication_handshake, propagate_commands
+from app.expiry import actively_expire_keys, get_expiry_timestamp
+from app.replication import propagate_commands
 from app.resp import RESPReader, RESPWriter
 from collections import deque
 
@@ -87,15 +87,38 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 return
 
 
-async def process_commands(
+async def replica_tasks(
     stream_reader: StreamReader,
     stream_writer: StreamWriter,
 ):
+    # replication_handshake + command_processing
+    # WAIT_TIME = 0.25  # seconds
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-    WAIT_TIME = 2  # seconds
+
+    ping = ["PING"]
+    await writer.write_array(ping)
+    data = await reader.read_simple_string()
+    print(data)
+
+    replconf = ["REPLCONF", "listening-port", "6380"]
+    await writer.write_array(replconf)
+    data = await reader.read_simple_string()
+    print(data)
+
+    replconf_capa = ["REPLCONF", "capa", "psync2", "capa", "psync2"]
+    await writer.write_array(replconf_capa)
+    data = await reader.read_simple_string()
+    print(data)
+
+    replconf_capa = ["PSYNC", "?", "-1"]
+    await writer.write_array(replconf_capa)
+    data = await reader.read_simple_string()
+    print(data)
+
+    rdb = await reader.read_rdb()
+    print(rdb)
 
     while True:
-        await asyncio.sleep(WAIT_TIME)
         try:
             msg = await reader.read_message()
             print("Received from master :", msg)
@@ -107,7 +130,7 @@ async def process_commands(
         match command:
             case "SET":
                 key, value = msg[1], msg[2]
-                DATASTORE[key] = value  # No active expiry
+                DATASTORE[key] = (value, get_expiry_timestamp([]))  # No active expiry
             case _:
                 pass
 
@@ -145,8 +168,7 @@ async def main():
         role = "slave"
         master_host, master_port = args.replicaof
         reader, writer = await asyncio.open_connection(master_host, master_port)
-        asyncio.create_task(replication_handshake(reader, writer))
-        asyncio.create_task(process_commands(reader, writer))
+        asyncio.create_task(replica_tasks(reader, writer))
     else:
         asyncio.create_task(propagate_commands(replication_buffer, replicas))
 

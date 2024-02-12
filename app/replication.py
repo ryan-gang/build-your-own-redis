@@ -1,4 +1,4 @@
-from asyncio import StreamReader, StreamWriter, sleep
+from asyncio import StreamReader, StreamWriter, sleep, Lock
 from collections import deque
 
 from app.resp import RESPReader, RESPWriter
@@ -30,7 +30,11 @@ async def replication_handshake(
     data = await reader.read_simple_string()
     print(data)
 
+    rdb = await reader.read_rdb()
+    print(rdb)
+
     return
+    
 
 
 async def propagate_commands(
