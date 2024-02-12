@@ -92,7 +92,7 @@ async def process_commands(
     stream_writer: StreamWriter,
 ):
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-    WAIT_TIME = 2  # seconds
+    WAIT_TIME = 0.5  # seconds
 
     while True:
         await asyncio.sleep(WAIT_TIME)
