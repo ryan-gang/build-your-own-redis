@@ -118,6 +118,14 @@ async def handle_info(writer: RESPWriter, msg: list[str], role: str):
     await writer.write_bulk_string(response)
 
 
+async def handle_replconf(writer: RESPWriter, msg: list[str]):
+    """
+    Handles the REPLCONF command from the Redis client.
+    """
+    response = "OK"
+    await writer.write_simple_string(response)
+
+
 def init_rdb_parser(
     parsing_reqd_flag: bool, rdb_file_path: str
 ) -> dict[str, tuple[str, int]]:

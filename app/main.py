@@ -10,12 +10,13 @@ from app.commands import (
     handle_info,
     handle_list_keys,
     handle_ping,
+    handle_replconf,
     handle_set,
     init_rdb_parser,
 )
 from app.expiry import actively_expire_keys
-from app.resp import RESPReader, RESPWriter
 from app.replication import replication_handshake
+from app.resp import RESPReader, RESPWriter
 
 role = "master"
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
@@ -68,6 +69,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_list_keys(writer, msg, DATASTORE)
             case "INFO":
                 await handle_info(writer, msg, role)
+            case "REPLCONF":
+                await handle_replconf(writer, msg)
             case _:
                 print(f"Unknown command received : {command}")
                 return
