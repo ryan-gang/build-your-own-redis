@@ -164,8 +164,10 @@ async def handle_wait(
     Handles the WAIT command from the Redis client.
     """
     updated_replicas = 0
-    await asyncio.sleep(1)
-    timeout = msg[2]
+    start_time = time.time()
+
+    await asyncio.sleep(0.125)
+    num_replicas, timeout = int(msg[1]), int(msg[2])
 
     if master_offset > 0:
         for repl_reader, repl_writer in replicas:
@@ -175,15 +177,23 @@ async def handle_wait(
                 response = await asyncio.wait_for(repl_reader.read_array(skip_first_byte=True), timeout=0.25)
                 print("response", response)
                 if response[0] == "REPLCONF" and response[1] == "ACK":
-                    repl_offset = response[2]
+                    repl_offset = int(response[2])
                     if repl_offset >= master_offset:
                         updated_replicas += 1
             except asyncio.TimeoutError:
                 print('Timeout expired. No data received.')
 
-        await writer.write_integer(updated_replicas)
+        response = (updated_replicas)
     else:
-        await writer.write_integer(len(replicas))
+        response = (len(replicas))
+
+    end_time = time.time()
+    elapsed_time = (end_time - start_time) * 1000
+
+    raise Exception(response, num_replicas)
+    if response < num_replicas:
+        await asyncio.sleep(max(0, timeout - elapsed_time))
+    await writer.write_integer(response)
     return
 
 def init_rdb_parser(
