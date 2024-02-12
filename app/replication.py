@@ -11,9 +11,22 @@ async def replication_handshake(
 
     ping = ["PING"]
     await writer.write_array(ping)
+    data = await reader.read_simple_string()
+    print(data)
 
     replconf = ["REPLCONF", "listening-port", "6380"]
     await writer.write_array(replconf)
+    data = await reader.read_simple_string()
+    print(data)
 
-    replconf_capa = ["REPLCONF", "capa", "psync2"]
+    replconf_capa = ["REPLCONF", "capa", "psync2", "capa", "psync2"]
     await writer.write_array(replconf_capa)
+    data = await reader.read_simple_string()
+    print(data)
+
+    replconf_capa = ["PSYNC", "?", "-1"]
+    await writer.write_array(replconf_capa)
+    data = await reader.read_simple_string()
+    print(data)
+
+    return
