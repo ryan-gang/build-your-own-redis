@@ -92,10 +92,9 @@ async def process_commands(
     stream_writer: StreamWriter,
 ):
     reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
-    WAIT_TIME = 2  # seconds
+    WAIT_TIME = 0.5  # seconds
 
     while True:
-        await asyncio.sleep(WAIT_TIME)
         try:
             msg = await reader.read_message()
             print("Received from master :", msg)
@@ -110,6 +109,7 @@ async def process_commands(
                 DATASTORE[key] = value  # No active expiry
             case _:
                 pass
+        await asyncio.sleep(WAIT_TIME)
 
 
 
@@ -140,12 +140,14 @@ async def main():
     if args.port:
         port = int(args.port)
 
+    lock = asyncio.Lock()
     if args.replicaof:
         global role
         role = "slave"
         master_host, master_port = args.replicaof
         reader, writer = await asyncio.open_connection(master_host, master_port)
-        asyncio.create_task(replication_handshake(reader, writer))
+        async with lock:
+            asyncio.create_task(replication_handshake(reader, writer))
         asyncio.create_task(process_commands(reader, writer))
     else:
         asyncio.create_task(propagate_commands(replication_buffer, replicas))
