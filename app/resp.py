@@ -57,7 +57,7 @@ class RESPReader(object):
             case _:
                 raise RuntimeError(f"Unknown payload identifier : {msg_code}")
 
-    async def read_array(self) -> Optional[list[Any]]:
+    async def read_array(self, skip_first_byte: bool = False) -> Optional[list[Any]]:
         """
         Reads and parses a RESP array message from the stream.
 
@@ -66,6 +66,8 @@ class RESPReader(object):
         in the array and parses each element individually using `read_message()`.
         """
         arr: list[Any] = []
+        if skip_first_byte:
+            await self.read_until(1)
 
         metadata = await self.read_line()
         if not metadata:
