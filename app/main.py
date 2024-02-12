@@ -17,14 +17,17 @@ from app.commands import (
     init_rdb_parser,
 )
 from app.expiry import actively_expire_keys
-from app.replication import replication_handshake
+from app.replication import replication_handshake, propagate_commands
 from app.resp import RESPReader, RESPWriter
+from collections import deque
 
 role = "master"
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
 DATASTORE: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
 # Main Datastore, All SET, GET data is stored in this global dict.
 CONFIG: dict[str, str] = {}  # key -> value (Redis config parameters)
+replication_buffer: deque[str] = deque()
+replicas: list[tuple[RESPReader, RESPWriter]] = []
 
 
 async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
@@ -63,6 +66,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_echo(writer, msg)
             case "SET":
                 await handle_set(writer, msg, DATASTORE)
+                resp = await writer.serialize_array(msg)
+                replication_buffer.append(resp)
             case "GET":
                 await handle_get(writer, msg, DATASTORE)
             case "CONFIG":
@@ -76,6 +81,7 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
             case "PSYNC":
                 await handle_psync(writer, msg)
                 await handle_rdb_transfer(writer, msg)
+                replicas.append((reader, writer))
             case _:
                 print(f"Unknown command received : {command}")
                 return
@@ -114,6 +120,8 @@ async def main():
         master_host, master_port = args.replicaof
         reader, writer = await asyncio.open_connection(master_host, master_port)
         asyncio.create_task(replication_handshake(reader, writer))
+    else:
+        asyncio.create_task(propagate_commands(replication_buffer, replicas))
 
     server = await asyncio.start_server(handler, host, port, reuse_port=False)
     print(f"Started Redis server @ {host}:{port}")

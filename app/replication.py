@@ -1,6 +1,6 @@
-from asyncio import StreamReader, StreamWriter
-
+from asyncio import StreamReader, StreamWriter, sleep
 from app.resp import RESPReader, RESPWriter
+from collections import deque
 
 
 async def replication_handshake(
@@ -30,3 +30,17 @@ async def replication_handshake(
     print(data)
 
     return
+
+
+async def propagate_commands(
+    replication_buffer: deque[str], replicas: list[tuple[RESPReader, RESPWriter]]
+):
+    WAIT_TIME = 1  # seconds
+    while True:
+        if len(replicas) != 0:
+            if len(replication_buffer) != 0:
+                cmd = replication_buffer.popleft()
+                for replica in replicas:
+                    _, w = replica
+                    await w.write(cmd)
+        await sleep(WAIT_TIME)
