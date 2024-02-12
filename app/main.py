@@ -131,9 +131,12 @@ async def replica_tasks(
             case "SET":
                 key, value = msg[1], msg[2]
                 DATASTORE[key] = (value, get_expiry_timestamp([]))  # No active expiry
+            case "REPLCONF":
+                # Master won't send any other REPLCONF message apart from GETACK.
+                response = ["REPLCONF", "ACK", "0"]
+                await writer.write_array(response)
             case _:
                 pass
-
 
 
 async def main():
