@@ -19,6 +19,18 @@ class RESPReader(object):
         """
         self.reader = reader
 
+    def get_byte_offset(self, message: list[str]) -> int:
+        # Returns the byte offset for a RESP command
+        # To be used only with RESP Arrays
+        offset = 0
+        offset += 2 * (2 * len(message) + 1)
+        offset += len(str(len(message))) + 1
+        for _, val in enumerate(message):
+            msg_len = len(val)
+            offset += len(str(msg_len)) + 1
+            offset += msg_len
+        return offset
+
     async def read_message(self) -> Any:
         """
         Reads and parses a single RESP message from the underlying stream.

@@ -118,6 +118,7 @@ async def replica_tasks(
     rdb = await reader.read_rdb()
     print(rdb)
 
+    offset = 0  # Count of processed bytes
     while True:
         try:
             msg = await reader.read_message()
@@ -133,10 +134,12 @@ async def replica_tasks(
                 DATASTORE[key] = (value, get_expiry_timestamp([]))  # No active expiry
             case "REPLCONF":
                 # Master won't send any other REPLCONF message apart from GETACK.
-                response = ["REPLCONF", "ACK", "0"]
+                response = ["REPLCONF", "ACK", offset]
                 await writer.write_array(response)
             case _:
                 pass
+        bytes_to_process = reader.get_byte_offset(msg)
+        offset += bytes_to_process
 
 
 async def main():
