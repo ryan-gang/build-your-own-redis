@@ -103,6 +103,15 @@ async def handle_list_keys(
     await writer.write_array(key_list)
 
 
+async def handle_info(writer: RESPWriter, msg: list[str], role: str):
+    """
+    Handles the INFO command from the Redis client.
+    """
+    header = msg[1]
+    response = f"{header}\nrole:{role}"
+    await writer.write_bulk_string(response)
+
+
 def init_rdb_parser(
     parsing_reqd_flag: bool, rdb_file_path: str
 ) -> dict[str, tuple[str, int]]:
