@@ -87,6 +87,32 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 return
 
 
+async def process_commands(
+    stream_reader: StreamReader,
+    stream_writer: StreamWriter,
+):
+    reader, writer = RESPReader(stream_reader), RESPWriter(stream_writer)
+    WAIT_TIME = 2  # seconds
+
+    while True:
+        await asyncio.sleep(WAIT_TIME)
+        try:
+            msg = await reader.read_message()
+            print("Received from master :", msg)
+        except (IncompleteReadError, ConnectionResetError) as err:
+            print(err)
+            await writer.close()
+            return
+        command = msg[0].upper()
+        match command:
+            case "SET":
+                key, value = msg[1], msg[2]
+                DATASTORE[key] = value  # No active expiry
+            case _:
+                pass
+
+
+
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -120,6 +146,7 @@ async def main():
         master_host, master_port = args.replicaof
         reader, writer = await asyncio.open_connection(master_host, master_port)
         asyncio.create_task(replication_handshake(reader, writer))
+        asyncio.create_task(process_commands(reader, writer))
     else:
         asyncio.create_task(propagate_commands(replication_buffer, replicas))
 

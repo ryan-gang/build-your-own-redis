@@ -110,11 +110,11 @@ async def handle_info(writer: RESPWriter, msg: list[str], role: str):
     """
     Handles the INFO command from the Redis client.
     """
-    header = f"# msg[1].capitalize()"
-    response = f"{header}\nrole:{role}"
+    header = f"# {msg[1]}.capitalize()"
+    response = f"{header}\r\nrole:{role}"
     if role == "master":
-        response += f"\nmaster_replid:{generate_random_string(40)}"
-        response += f"\nmaster_repl_offset:0"
+        response += f"\r\nmaster_replid:{generate_random_string(40)}"
+        response += f"\r\nmaster_repl_offset:0"
 
     await writer.write_bulk_string(response)
 

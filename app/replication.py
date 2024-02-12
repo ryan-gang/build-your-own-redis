@@ -1,6 +1,7 @@
 from asyncio import StreamReader, StreamWriter, sleep
-from app.resp import RESPReader, RESPWriter
 from collections import deque
+
+from app.resp import RESPReader, RESPWriter
 
 
 async def replication_handshake(
