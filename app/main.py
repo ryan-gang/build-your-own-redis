@@ -75,7 +75,7 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_replconf(writer, msg)
             case "PSYNC":
                 await handle_psync(writer, msg)
-                # await handle_rdb_transfer(writer, msg)
+                await handle_rdb_transfer(writer, msg)
             case _:
                 print(f"Unknown command received : {command}")
                 return

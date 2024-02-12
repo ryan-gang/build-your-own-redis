@@ -1,6 +1,7 @@
 import os
 import random
 import string
+import binascii
 
 from app.expiry import (
     EXPIRY_TIMESTAMP_DEFAULT_VAL,
@@ -138,8 +139,19 @@ async def handle_rdb_transfer(writer: RESPWriter, msg: list[str]):
     """
     Handles the REPLCONF command from the Redis client.
     """
-    response = "OK"
-    await writer.write_simple_string(response)
+    hex_str = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+
+    try:
+        # Decode the hex string to bytes
+        bytes_data = binascii.unhexlify(hex_str)
+    except binascii.Error as e:
+        print(f"Encountered {e} while decoding hex string")
+        return None  # Adjust based on how you want to handle errors
+
+    resp = b"$" + str(len(bytes_data)).encode() + b"\r\n"
+    message = resp + bytes_data
+
+    await writer.write_raw(message)
 
 
 def init_rdb_parser(

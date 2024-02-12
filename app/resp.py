@@ -265,6 +265,12 @@ class RESPWriter(object):
         """
         self.writer.write(message.encode())
         await self.writer.drain()
+    
+    async def write_raw(self, message: bytes):
+        """
+        """
+        self.writer.write(message)
+        await self.writer.drain()
 
     async def close(self):
         """
