@@ -72,20 +72,22 @@ class RDBParser(object):
                         length = -1
                     case _:
                         raise ValueError(
-                            f"Unknown format for Length Encoded Int case '11' : {int(format)}"
+                            "Unknown format for Length Encoded Int case '11'"
+                            f" : {int(format)}"
                         )
             case _:
                 raise ValueError(
-                    f"Unknown encoding for Length Encoded Int : {determinant_bits[2:]}"
+                    "Unknown encoding for Length Encoded Int :"
+                    f" {determinant_bits[2:]}"
                 )
 
         return special_format, length
 
     def parse_encoded_string(self) -> str:
         """
-        Parses an encoded string from the RDB file.
-        Uses the parse_length_encoded_int to get the length of the string. And a
-        bool denoting if special format is used or not.
+        Parses an encoded string from the RDB file. Uses the
+        parse_length_encoded_int to get the length of the string. And a bool
+        denoting if special format is used or not.
         """
         special_format, length = self.parse_length_encoded_int()
         if not special_format:

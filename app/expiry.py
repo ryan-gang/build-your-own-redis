@@ -8,8 +8,9 @@ async def actively_expire_keys(
     DATASTORE: dict[str, tuple[str, int]], ACTIVE_KEY_EXPIRY_TIME_WINDOW: int
 ):
     """
-    Periodically scans the provided data store (dictionary) for expired keys and
-    removes them.
+    Periodically scans the provided data store (dictionary) for expired keys
+    and removes them.
+
     This asynchronous function runs in an infinite loop, performing the
     following actions at each iteration:
     * Gets the current timestamp.
@@ -66,10 +67,10 @@ def get_expiry_timestamp(msg: list[str]) -> int:
     Parses the provided RESP command message and extracts the optional key
     expiry timestamp.
     This function checks if the message includes an expiry argument ("EX" or
-    "PX") and the corresponding numerical value. If found, it converts the value
-    to milliseconds and adds it to the current timestamp to define the absolute
-    expiry time. Otherwise, it returns the default value indicating no active
-    expiry.
+    "PX") and the corresponding numerical value. If found, it converts the
+    value to milliseconds and adds it to the current timestamp to define the
+    absolute expiry time. Otherwise, it returns the default value indicating no
+    active expiry.
     This function is used when setting keys to determine their valid lifespan
     based on the provided command options.
     """

@@ -21,3 +21,6 @@ exclude = '''
 py_version=312
 skip = [".gitignore", ".dockerignore"]
 skip_glob = ["docs/*", "venv/*", ".history/*"]
+[tool.flake8]
+max-line-length = 79
+ignore = ["E203"]

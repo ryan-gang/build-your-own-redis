@@ -4,8 +4,8 @@ from typing import Any, Optional
 
 class RESPReader(object):
     """
-    A class for reading and parsing Redis RESP commands from clients efficiently
-    and in real-time.
+    A class for reading and parsing Redis RESP commands from clients
+    efficiently and in real-time.
 
     The reader operates by reading data chunks from a stream and parsing them
     simultaneously based on the first byte encountered (payload identifier).
@@ -15,7 +15,8 @@ class RESPReader(object):
 
     def __init__(self, reader: StreamReader):
         """
-        Initializes the `RESPReader` instance with the provided `reader` object.
+        Initializes the `RESPReader` instance with the provided `reader`
+        object.
         """
         self.reader = reader
 
@@ -35,7 +36,9 @@ class RESPReader(object):
         """
         Reads and parses a single RESP message from the underlying stream.
 
-        This method first reads one byte to identify the message type based on the RESP protocol encoding. It then delegates the actual parsing to the appropriate internal function based on the identified type.
+        This method first reads one byte to identify the message type based on
+        the RESP protocol encoding. It then delegates the actual parsing to the
+        appropriate internal function based on the identified type.
         """
         msg_code = (await self.reader.readexactly(1)).decode()
         match msg_code:
@@ -64,8 +67,9 @@ class RESPReader(object):
         Reads and parses a RESP array message from the stream.
 
         This method assumes the identifier byte has already been identified as
-        the indicator for an array message. It then reads the number of elements
-        in the array and parses each element individually using `read_message()`.
+        the indicator for an array message. It then reads the number of
+        elements in the array and parses each element individually using
+        `read_message()`.
         """
         arr: list[Any] = []
         if skip_first_byte:
@@ -87,7 +91,8 @@ class RESPReader(object):
         Reads and parses a RESP simple string message from the stream.
 
         This method assumes the identifier byte has already been identified as
-        the indicator for a simple string. It then reads the actual string data.
+        the indicator for a simple string. It then reads the actual string
+        data.
         """
         data = await self.read_line()
         return data
@@ -97,8 +102,8 @@ class RESPReader(object):
         Reads and parses a RESP simple error message from the stream.
 
         This method assumes the identifier byte has already been identified as
-        the indicator for a simple error. It then reads the remaining content of
-        the error message.
+        the indicator for a simple error. It then reads the remaining content
+        of the error message.
         """
         data = await self.read_line()
         return data
@@ -137,8 +142,8 @@ class RESPReader(object):
         """
         Reads a single RESP line message from the stream.
 
-        This method reads bytes from the underlying stream until it encounters a
-        CRLF character (`b"\r\n"`). It then trims the trailing CRLF
+        This method reads bytes from the underlying stream until it encounters
+        a CRLF character (`b"\r\n"`). It then trims the trailing CRLF
         characters (`\r\n`) and decodes the remaining bytes using the default
         encoding.
         """
@@ -150,9 +155,9 @@ class RESPReader(object):
         Reads a specific number of bytes from the stream.
 
         This method directly calls the `readexactly` method of the underlying
-        stream reader and expects an exact number of bytes (`n`) to be provided.
-        It then trims the trailing newline characters (`\r\n`) and decodes the
-        remaining bytes using the default encoding.
+        stream reader and expects an exact number of bytes (`n`) to be
+        provided. It then trims the trailing newline characters (`\r\n`) and
+        decodes the remaining bytes using the default encoding.
         """
         data = await self.reader.readexactly(n)
         return data[:-2].decode()
@@ -162,13 +167,13 @@ class RESPReader(object):
         Reads a specific number of bytes from the stream.
 
         This method directly calls the `readexactly` method of the underlying
-        stream reader and expects an exact number of bytes (`n`) to be provided.
-        It then trims the trailing newline characters (`\r\n`) and decodes the
-        remaining bytes using the default encoding.
+        stream reader and expects an exact number of bytes (`n`) to be
+        provided. It then trims the trailing newline characters (`\r\n`) and
+        decodes the remaining bytes using the default encoding.
         """
         _ = await self.reader.readexactly(1)
-        l = await self.read_line()
-        length = int(l)
+        line = await self.read_line()
+        length = int(line)
         if length == -1:
             return b""
         data = await self.reader.readexactly(length)
@@ -186,7 +191,8 @@ class RESPWriter(object):
 
     def __init__(self, writer: StreamWriter):
         """
-        Initializes the `RESPWriter` instance with the provided `writer` object.
+        Initializes the `RESPWriter` instance with the provided `writer`
+        object.
         """
         self.writer = writer
 
@@ -242,8 +248,8 @@ class RESPWriter(object):
         Serializes a string into a RESP bulk string encoded message.
 
         This method checks for null bulk strings (represented by `None`) and
-        encodes them with a special code ("$-1\r\n"). Otherwise, it prefixes the
-        string length with the RESP bulk string code ("$") and appends the
+        encodes them with a special code ("$-1\r\n"). Otherwise, it prefixes
+        the string length with the RESP bulk string code ("$") and appends the
         string data and a newline delimiter ("\r\n").
         """
         MSG_CODE, DELIMITER = "$", "\r\n"
@@ -292,9 +298,10 @@ class RESPWriter(object):
         """
         Writes a serialized RESP message to the underlying stream.
 
-        This method encodes the provided `message` string (assumed to be already
-        in RESP format) into bytes and writes it to the `writer` object. It then
-        waits for the stream to be flushed to ensure all data is sent.
+        This method encodes the provided `message` string (assumed to be
+        already in RESP format) into bytes and writes it to the `writer`
+        object. It then waits for the stream to be flushed to ensure all data
+        is sent.
         """
         self.writer.write(message.encode())
         await self.writer.drain()
