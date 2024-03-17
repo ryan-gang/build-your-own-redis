@@ -1,0 +1,23 @@
+[tool.black]
+line-length = 79
+target-version = ['py312']
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | venv
+  | .history
+)/
+'''
+[tool.isort]
+py_version=312
+skip = [".gitignore", ".dockerignore"]
+skip_glob = ["docs/*", "venv/*", ".history/*"]

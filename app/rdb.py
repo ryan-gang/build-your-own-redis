@@ -92,7 +92,9 @@ class RDBParser(object):
             return self._read_bytes(length).decode()
         else:
             # This is the "Integers as String" path
-            return str(int.from_bytes(self._read_bytes(length), byteorder="big"))
+            return str(
+                int.from_bytes(self._read_bytes(length), byteorder="big")
+            )
 
     def parse_simple_dict(self) -> dict[str, str]:
         """
@@ -116,11 +118,16 @@ class RDBParser(object):
             if self._peek_bytes()[:1] == b"\xfc":
                 # "expiry time in ms", followed by 8 byte unsigned long
                 self._read_bytes(1)  # Skip
-                expiry = int.from_bytes(self._read_bytes(8), byteorder="little")
+                expiry = int.from_bytes(
+                    self._read_bytes(8), byteorder="little"
+                )
             elif self._peek_bytes()[:1] == b"\xfd":
                 # "expiry time in seconds", followed by 4 byte unsigned int
                 self._read_bytes(1)  # Skip
-                expiry = int.from_bytes(self._read_bytes(4), byteorder="little") * 1000
+                expiry = (
+                    int.from_bytes(self._read_bytes(4), byteorder="little")
+                    * 1000
+                )
             else:
                 expiry = EXPIRY_TIMESTAMP_DEFAULT_VAL
             _ = self._read_bytes(1)  # value_type
