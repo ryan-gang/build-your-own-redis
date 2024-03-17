@@ -352,7 +352,11 @@ async def handle_xrange(writer: RESPWriter, msg: list[str]):
         start_idx = 0
     else:
         start_idx = bisect.bisect_left(stream_keys, stream_entry_id_start)
-    end_idx = bisect.bisect_left(stream_keys, stream_entry_id_end)
+
+    if stream_entry_id_end == "+":
+        end_idx = len(stream_keys) - 1
+    else:
+        end_idx = bisect.bisect_left(stream_keys, stream_entry_id_end)
 
     output = []
     for i in range(start_idx, end_idx + 1):
