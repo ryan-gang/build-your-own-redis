@@ -1,10 +1,10 @@
 import asyncio
 import binascii
 import bisect
+import sys
 import time
 from asyncio import sleep
 from typing import Any, Optional
-import sys
 
 from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
                         get_expiry_timestamp)
@@ -371,6 +371,13 @@ async def handle_xread(writer: RESPWriter, msg: list[str]):
             blocking_time = sys.maxsize
         stream_key = msg[4]
         stream_entry_id = msg[5]
+        if stream_entry_id == "$":
+            stream = streams[stream_key]
+            if len(stream) == 0:
+                stream_entry_id = "0-0"
+            else:
+                stream_entry_id = sorted(list(stream.keys()))[-1]
+
         stream_entry_id_start = await _new_entry_added_to_stream(
             stream_key, stream_entry_id, blocking_time / 1000
         )
