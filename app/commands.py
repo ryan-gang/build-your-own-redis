@@ -2,7 +2,8 @@ import asyncio
 import binascii
 import bisect
 import time
-from typing import Any
+from asyncio import sleep
+from typing import Any, Optional
 
 from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
                         get_expiry_timestamp)
@@ -361,15 +362,32 @@ async def handle_xrange(writer: RESPWriter, msg: list[str]):
 
 
 async def handle_xread(writer: RESPWriter, msg: list[str]):
-    stream_count = len(msg[2:]) // 2
     response = []
 
-    for op in range(stream_count):
-        stream_key = msg[2 + op]
-        stream_entry_id_start = msg[2 + stream_count + op]
-        print(op, stream_key, stream_entry_id_start)
+    if msg[1] == "block":
+        blocking_time = int(msg[2])
+        stream_key = msg[4]
+        stream_entry_id = msg[5]
+        stream_entry_id_start = await _new_entry_added_to_stream(
+            stream_key, stream_entry_id, blocking_time / 1000
+        )
+        if stream_entry_id_start is None:
+            # await writer.write_bulk_string("nil")
+            await writer.write_raw(b"$-1\r\n")
+            # await writer.write_raw(b"_\r\n")
+            return
         output = _xread_on_single_stream(stream_key, stream_entry_id_start)
         response.append(output)
+    else:
+        stream_count = len(msg[2:]) // 2
+
+        for op in range(stream_count):
+            stream_key = msg[2 + op]
+            stream_entry_id_start = msg[2 + stream_count + op]
+            print(op, stream_key, stream_entry_id_start)
+
+            output = _xread_on_single_stream(stream_key, stream_entry_id_start)
+            response.append(output)
 
     await writer.write_array(response)
 
@@ -435,3 +453,23 @@ def _xread_on_single_stream(stream_key: str, stream_entry_id_start: str):
     entries = _fetch_stream_entries(stream, stream_keys, start_idx, end_idx)
     output = _format_fetched_stream_entries_for_xread(entries, stream_key)
     return output
+
+
+async def _new_entry_added_to_stream(
+    stream_key: str, stream_entry_id: str, total_time: float
+) -> Optional[str]:
+    WAIT_TIME = 0.125  # seconds
+    slept = 0
+    while True:
+        stream = streams[stream_key]
+        stream_keys = sorted(list(stream.keys()))
+        if len(stream_keys) == 0:
+            continue
+        latest_key = stream_keys[-1]
+        if latest_key > stream_entry_id:
+            break
+        slept += WAIT_TIME
+        if slept >= total_time:
+            return None
+        await sleep(WAIT_TIME)
+    return latest_key
