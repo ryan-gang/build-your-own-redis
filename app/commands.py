@@ -1,5 +1,6 @@
 import asyncio
 import binascii
+import bisect
 import time
 from typing import Any
 
@@ -12,7 +13,7 @@ from app.resp import RESPReader, RESPWriter
 from app.util import generate_random_string
 
 stream_entries = dict[str, str]
-stream = list[dict[str, stream_entries]]
+stream = dict[str, stream_entries]
 streams: dict[str, stream] = {}  # stream_key -> stream
 
 
@@ -262,7 +263,7 @@ async def handle_xadd(
     stream_entry = {}
     for i in range(0, len(stream_entry_list), 2):
         stream_entry[stream_entry_list[i]] = stream_entry_list[i + 1]
-    stream = streams.get(stream_key, [])
+    stream = streams.get(stream_key, {})
 
     if stream_entry_id == "*":
         current_timestamp = int(time.time() * 1000)
@@ -271,7 +272,12 @@ async def handle_xadd(
         current_timestamp, current_sequence = stream_entry_id.split("-")
         current_timestamp = int(current_timestamp)
 
-    stream_last_entry = stream[-1] if len(stream) > 0 else None
+    if len(stream) > 0:
+        stream_last_entry_id = sorted(list(stream.keys()))[-1]
+        stream_last_entry = stream[stream_last_entry_id]
+        print(sorted(list(stream.keys())))
+    else:
+        stream_last_entry = None
 
     if current_sequence == "*":
         if stream_last_entry is None:
@@ -280,7 +286,7 @@ async def handle_xadd(
             else:
                 current_sequence = 1
         else:
-            stream_last_entry_id = list(stream_last_entry.keys())[0]
+            stream_last_entry_id = sorted(list(stream.keys()))[-1]
             stream_last_entry_timestamp, stream_last_entry_sequence = (
                 stream_last_entry_id.split("-")
             )
@@ -304,7 +310,6 @@ async def handle_xadd(
         )
         return
     if stream_last_entry is not None:
-        stream_last_entry_id = list(stream_last_entry.keys())[0]
         stream_last_entry_timestamp, stream_last_entry_sequence = (
             stream_last_entry_id.split("-")
         )
@@ -322,7 +327,7 @@ async def handle_xadd(
             return
 
     # Add stream_key to Datastore as a new object stream()
-    stream.append({stream_entry_id: stream_entry})
+    stream[stream_entry_id] = stream_entry
     streams[stream_key] = stream
 
     datastore[stream_key] = (
@@ -333,3 +338,34 @@ async def handle_xadd(
 
     response = stream_entry_id
     await writer.write_bulk_string(response)
+
+
+async def handle_xrange(writer: RESPWriter, msg: list[str]):
+    stream_key = msg[1]
+    stream_entry_id_start = msg[2]
+    stream_entry_id_end = msg[3]
+
+    stream = streams.get(stream_key, [])  # Handle case where it is empty
+    print(stream)
+    stream_keys = sorted(list(stream.keys()))
+    print(stream_keys)
+
+    start_idx = bisect.bisect_left(stream_keys, stream_entry_id_start)
+    end_idx = bisect.bisect_left(stream_keys, stream_entry_id_end)
+    print(start_idx, end_idx + 1)
+
+    output = []
+    for i in range(start_idx, end_idx + 1):
+        inner = []
+        key = stream_keys[i]
+        inner.append(key)
+        d = stream[key]
+        inner.append(
+            list(list(d.items())[0])
+        )  # Handle passing all values in stream entry
+        output.append(inner)
+
+    print("output", output)
+    await writer.write_array(output)
+    print("Done writing")
+    return
