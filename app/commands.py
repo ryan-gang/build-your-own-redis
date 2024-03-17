@@ -265,10 +265,34 @@ async def handle_xadd(
     stream = streams.get(stream_key, [])
 
     current_timestamp, current_sequence = stream_entry_id.split("-")
-    current_timestamp, current_sequence = int(current_timestamp), int(
-        current_sequence
-    )
+    current_timestamp = int(current_timestamp)
+
     stream_last_entry = stream[-1] if len(stream) > 0 else None
+
+    if current_sequence == "*":
+        if stream_last_entry is None:
+            if current_timestamp != 0:
+                current_sequence = 0
+            else:
+                current_sequence = 1
+        else:
+            stream_last_entry_id = list(stream_last_entry.keys())[0]
+            stream_last_entry_timestamp, stream_last_entry_sequence = (
+                stream_last_entry_id.split("-")
+            )
+            stream_last_entry_timestamp = int(stream_last_entry_timestamp)
+            stream_last_entry_sequence = int(stream_last_entry_sequence)
+            if current_timestamp == stream_last_entry_timestamp:
+                current_sequence = stream_last_entry_sequence + 1
+            else:
+                if current_timestamp != 0:
+                    current_sequence = 0
+                else:
+                    current_sequence = 1
+    else:
+        current_sequence = int(current_sequence)
+
+    stream_entry_id = f"{current_timestamp}-{current_sequence}"
 
     if current_timestamp == 0 and current_sequence == 0:
         await writer.write_simple_error(
@@ -277,12 +301,15 @@ async def handle_xadd(
         return
     if stream_last_entry is not None:
         stream_last_entry_id = list(stream_last_entry.keys())[0]
-        timestamp, sequence = stream_last_entry_id.split("-")
-        timestamp = int(timestamp)
-        sequence = int(sequence)
+        stream_last_entry_timestamp, stream_last_entry_sequence = (
+            stream_last_entry_id.split("-")
+        )
+        stream_last_entry_timestamp = int(stream_last_entry_timestamp)
+        stream_last_entry_sequence = int(stream_last_entry_sequence)
 
-        if current_timestamp < timestamp or (
-            current_timestamp <= timestamp and current_sequence <= sequence
+        if current_timestamp < stream_last_entry_timestamp or (
+            current_timestamp <= stream_last_entry_timestamp
+            and current_sequence <= stream_last_entry_sequence
         ):
             await writer.write_simple_error(
                 "ERR The ID specified in XADD is equal or smaller than the"
