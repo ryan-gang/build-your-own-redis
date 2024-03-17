@@ -264,8 +264,12 @@ async def handle_xadd(
         stream_entry[stream_entry_list[i]] = stream_entry_list[i + 1]
     stream = streams.get(stream_key, [])
 
-    current_timestamp, current_sequence = stream_entry_id.split("-")
-    current_timestamp = int(current_timestamp)
+    if stream_entry_id == "*":
+        current_timestamp = int(time.time() * 1000)
+        current_sequence = 0
+    else:
+        current_timestamp, current_sequence = stream_entry_id.split("-")
+        current_timestamp = int(current_timestamp)
 
     stream_last_entry = stream[-1] if len(stream) > 0 else None
 
