@@ -275,7 +275,6 @@ async def handle_xadd(
     if len(stream) > 0:
         stream_last_entry_id = sorted(list(stream.keys()))[-1]
         stream_last_entry = stream[stream_last_entry_id]
-        print(sorted(list(stream.keys())))
     else:
         stream_last_entry = None
 
@@ -358,18 +357,39 @@ async def handle_xrange(writer: RESPWriter, msg: list[str]):
     else:
         end_idx = bisect.bisect_left(stream_keys, stream_entry_id_end)
 
-    output = []
-    for i in range(start_idx, end_idx + 1):
-        inner = []
-        key = stream_keys[i]
-        inner.append(key)
-        d = stream[key]
-        inner.append(
-            list(list(d.items())[0])
-        )  # Handle passing all values in stream entry
-        output.append(inner)
-
-    print("output", output)
+        output = _format_fetched_stream_entries(
+            _fetch_stream_entries(stream, stream_keys, start_idx, end_idx)
+        )
     await writer.write_array(output)
-    print("Done writing")
     return
+
+
+def _fetch_stream_entries(
+    stream: dict[str, stream_entries],
+    stream_keys: list[str],
+    start_idx: int,
+    end_idx: int,
+) -> list[tuple[str, stream_entries]]:
+    entries: list[tuple[str, stream_entries]] = []
+    for key in stream_keys[start_idx : end_idx + 1]:
+        entries.append((key, stream[key]))
+    return entries
+
+
+def _format_fetched_stream_entries(
+    entries: list[tuple[str, stream_entries]],
+) -> list[str]:
+    inner_list_type = list[tuple[str, list[str]]]
+    output: list[inner_list_type] = []
+    for entry in entries:
+        inner: inner_list_type = []
+        key = entry[0]
+        inner.append(key)
+        d = entry[1]
+        d_as_list: list[str] = []
+        for k, v in d.items():
+            d_as_list.append(k)
+            d_as_list.append(v)
+        inner.append(d_as_list)
+        output.append(inner)
+    return output
