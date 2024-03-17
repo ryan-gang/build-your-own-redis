@@ -4,6 +4,7 @@ import bisect
 import time
 from asyncio import sleep
 from typing import Any, Optional
+import sys
 
 from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
                         get_expiry_timestamp)
@@ -366,15 +367,15 @@ async def handle_xread(writer: RESPWriter, msg: list[str]):
 
     if msg[1] == "block":
         blocking_time = int(msg[2])
+        if blocking_time == 0:
+            blocking_time = sys.maxsize
         stream_key = msg[4]
         stream_entry_id = msg[5]
         stream_entry_id_start = await _new_entry_added_to_stream(
             stream_key, stream_entry_id, blocking_time / 1000
         )
         if stream_entry_id_start is None:
-            # await writer.write_bulk_string("nil")
             await writer.write_raw(b"$-1\r\n")
-            # await writer.write_raw(b"_\r\n")
             return
         output = _xread_on_single_stream(stream_key, stream_entry_id_start)
         response.append(output)
