@@ -346,13 +346,13 @@ async def handle_xrange(writer: RESPWriter, msg: list[str]):
     stream_entry_id_end = msg[3]
 
     stream = streams.get(stream_key, [])  # Handle case where it is empty
-    print(stream)
     stream_keys = sorted(list(stream.keys()))
-    print(stream_keys)
 
-    start_idx = bisect.bisect_left(stream_keys, stream_entry_id_start)
+    if stream_entry_id_start == "-":
+        start_idx = 0
+    else:
+        start_idx = bisect.bisect_left(stream_keys, stream_entry_id_start)
     end_idx = bisect.bisect_left(stream_keys, stream_entry_id_end)
-    print(start_idx, end_idx + 1)
 
     output = []
     for i in range(start_idx, end_idx + 1):
