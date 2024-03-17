@@ -4,22 +4,11 @@ import os
 from asyncio import IncompleteReadError, StreamReader, StreamWriter
 from collections import deque
 
-from app.commands import (
-    handle_config_get,
-    handle_echo,
-    handle_get,
-    handle_info,
-    handle_list_keys,
-    handle_ping,
-    handle_psync,
-    handle_rdb_transfer,
-    handle_replconf,
-    handle_set,
-    handle_type,
-    handle_wait,
-    handle_xadd,
-    handle_xrange,
-)
+from app.commands import (handle_config_get, handle_echo, handle_get,
+                          handle_info, handle_list_keys, handle_ping,
+                          handle_psync, handle_rdb_transfer, handle_replconf,
+                          handle_set, handle_type, handle_wait, handle_xadd,
+                          handle_xrange, handle_xread)
 from app.expiry import actively_expire_keys
 from app.replication import datastore, propagate_commands, replica_tasks
 from app.resp import RESPReader, RESPWriter
@@ -100,6 +89,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_xadd(writer, msg, datastore)
             case "XRANGE":
                 await handle_xrange(writer, msg)
+            case "XREAD":
+                await handle_xread(writer, msg)
             case _:
                 print(f"Unknown command received : {command}")
                 return

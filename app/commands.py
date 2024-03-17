@@ -4,11 +4,8 @@ import bisect
 import time
 from typing import Any
 
-from app.expiry import (
-    EXPIRY_TIMESTAMP_DEFAULT_VAL,
-    check_key_expiration,
-    get_expiry_timestamp,
-)
+from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
+                        get_expiry_timestamp)
 from app.resp import RESPReader, RESPWriter
 from app.util import generate_random_string
 
@@ -357,11 +354,26 @@ async def handle_xrange(writer: RESPWriter, msg: list[str]):
     else:
         end_idx = bisect.bisect_left(stream_keys, stream_entry_id_end)
 
-        output = _format_fetched_stream_entries(
-            _fetch_stream_entries(stream, stream_keys, start_idx, end_idx)
-        )
+    output = _format_fetched_stream_entries_for_xrange(
+        _fetch_stream_entries(stream, stream_keys, start_idx, end_idx)
+    )
     await writer.write_array(output)
-    return
+
+
+async def handle_xread(writer: RESPWriter, msg: list[str]):
+    stream_key = msg[2]
+    stream_entry_id_start = msg[3]
+
+    stream = streams.get(stream_key, [])  # Handle case where it is empty
+    stream_keys = sorted(list(stream.keys()))
+
+    start_idx = bisect.bisect_left(stream_keys, stream_entry_id_start)
+    end_idx = len(stream_keys) - 1
+
+    entries = _fetch_stream_entries(stream, stream_keys, start_idx, end_idx)
+    output = _format_fetched_stream_entries_for_xread(entries, stream_key)
+
+    await writer.write_array([output])
 
 
 def _fetch_stream_entries(
@@ -376,7 +388,7 @@ def _fetch_stream_entries(
     return entries
 
 
-def _format_fetched_stream_entries(
+def _format_fetched_stream_entries_for_xrange(
     entries: list[tuple[str, stream_entries]],
 ) -> list[str]:
     inner_list_type = list[tuple[str, list[str]]]
@@ -393,3 +405,23 @@ def _format_fetched_stream_entries(
         inner.append(d_as_list)
         output.append(inner)
     return output
+
+
+def _format_fetched_stream_entries_for_xread(
+    entries: list[tuple[str, stream_entries]], stream_key: str
+) -> list[str]:
+    inner_list_type = list[tuple[str, list[str]]]
+    output: list[inner_list_type] = []
+    for entry in entries:
+        inner: inner_list_type = []
+        key = entry[0]
+        inner.append(key)
+        d = entry[1]
+        d_as_list: list[str] = []
+        for k, v in d.items():
+            d_as_list.append(k)
+            d_as_list.append(v)
+        inner.append(d_as_list)
+        output.append(inner)
+
+    return [stream_key, output]
