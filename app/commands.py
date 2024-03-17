@@ -3,8 +3,11 @@ import binascii
 import time
 from typing import Any
 
-from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
-                        get_expiry_timestamp)
+from app.expiry import (
+    EXPIRY_TIMESTAMP_DEFAULT_VAL,
+    check_key_expiration,
+    get_expiry_timestamp,
+)
 from app.resp import RESPReader, RESPWriter
 from app.util import generate_random_string
 
@@ -255,11 +258,38 @@ async def handle_xadd(
     stream_key = msg[1]
     stream_entry_id = msg[2]
     stream_entry_list = msg[3:]
+
     stream_entry = {}
     for i in range(0, len(stream_entry_list), 2):
         stream_entry[stream_entry_list[i]] = stream_entry_list[i + 1]
-
     stream = streams.get(stream_key, [])
+
+    current_timestamp, current_sequence = stream_entry_id.split("-")
+    current_timestamp, current_sequence = int(current_timestamp), int(
+        current_sequence
+    )
+    stream_last_entry = stream[-1] if len(stream) > 0 else None
+
+    if current_timestamp == 0 and current_sequence == 0:
+        await writer.write_simple_error(
+            "ERR The ID specified in XADD must be greater than 0-0"
+        )
+        return
+    if stream_last_entry is not None:
+        stream_last_entry_id = list(stream_last_entry.keys())[0]
+        timestamp, sequence = stream_last_entry_id.split("-")
+        timestamp = int(timestamp)
+        sequence = int(sequence)
+
+        if current_timestamp < timestamp or (
+            current_timestamp <= timestamp and current_sequence <= sequence
+        ):
+            await writer.write_simple_error(
+                "ERR The ID specified in XADD is equal or smaller than the"
+                " target stream top item"
+            )
+            return
+
     # Add stream_key to Datastore as a new object stream()
     stream.append({stream_entry_id: stream_entry})
     streams[stream_key] = stream
