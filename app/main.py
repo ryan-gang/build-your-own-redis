@@ -7,11 +7,11 @@ from collections import deque
 from app.commands import (handle_config_get, handle_echo, handle_get,
                           handle_info, handle_list_keys, handle_ping,
                           handle_psync, handle_rdb_transfer, handle_replconf,
-                          handle_set, handle_type, handle_wait,
-                          init_rdb_parser)
+                          handle_set, handle_type, handle_wait, handle_xadd)
 from app.expiry import actively_expire_keys
 from app.replication import datastore, propagate_commands, replica_tasks
 from app.resp import RESPReader, RESPWriter
+from app.util import init_rdb_parser
 
 role = "master"
 ACTIVE_KEY_EXPIRY_TIME_WINDOW = 60  # seconds
@@ -84,6 +84,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                     await handle_wait(
                         writer, replicas, replication_offset, msg
                     )
+            case "XADD":
+                await handle_xadd(writer, msg, datastore)
             case _:
                 print(f"Unknown command received : {command}")
                 return

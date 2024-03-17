@@ -1,17 +1,17 @@
 import asyncio
 import binascii
-import os
-import random
-import string
 import time
 from typing import Any
-from app.expiry import (
-    EXPIRY_TIMESTAMP_DEFAULT_VAL,
-    check_key_expiration,
-    get_expiry_timestamp,
-)
-from app.rdb import RDBParser
+
+from app.expiry import (EXPIRY_TIMESTAMP_DEFAULT_VAL, check_key_expiration,
+                        get_expiry_timestamp)
 from app.resp import RESPReader, RESPWriter
+from app.util import generate_random_string
+
+stream_entries = dict[str, str]
+stream = list[dict[str, stream_entries]]
+streams: dict[str, stream] = {}  # stream_key -> stream
+
 
 type_mapping = {
     "str": "string",
@@ -22,7 +22,13 @@ type_mapping = {
     "set": "set",
     "bool": "boolean",
     "NoneType": "none",
+    "stream_key_type": "stream",
 }
+
+
+class stream_key_type:
+    def __init__(self, val: str):
+        val = val
 
 
 async def handle_ping(writer: RESPWriter):
@@ -63,7 +69,6 @@ async def handle_type(
         type_name = "none"
     else:
         type_name = (type(value)).__name__
-    print(key, value, type_name, type_mapping.get(type_name, "none"))
     response = type_mapping.get(type_name, "none")
     await writer.write_simple_string(response)
 
@@ -244,20 +249,26 @@ async def handle_wait(
     return
 
 
-def init_rdb_parser(
-    parsing_reqd_flag: bool, rdb_file_path: str
-) -> dict[str, tuple[str, int]]:
-    """
-    Simple utility function that only parses the .rdb file if parsing_reqd_flag
-    is set, and if the file exists. Returns the parsed key-value store, or an
-    empty dict.
-    """
-    if parsing_reqd_flag and os.path.isfile(rdb_file_path):
-        parser = RDBParser(rdb_file_path)
-        return parser.kv
-    return {}
+async def handle_xadd(
+    writer: RESPWriter, msg: list[str], datastore: dict[str, tuple[Any, int]]
+):
+    stream_key = msg[1]
+    stream_entry_id = msg[2]
+    stream_entry_list = msg[3:]
+    stream_entry = {}
+    for i in range(0, len(stream_entry_list), 2):
+        stream_entry[stream_entry_list[i]] = stream_entry_list[i + 1]
 
+    stream = streams.get(stream_key, [])
+    # Add stream_key to Datastore as a new object stream()
+    stream.append({stream_entry_id: stream_entry})
+    streams[stream_key] = stream
 
-def generate_random_string(length: int) -> str:
-    chars = string.ascii_lowercase + string.digits
-    return "".join(random.choice(chars) for _ in range(length))
+    datastore[stream_key] = (
+        stream_key_type(stream_key),
+        get_expiry_timestamp([]),
+    )  # No expiry
+    # Add stream_key to datastore, to handle TYPE on it.
+
+    response = stream_entry_id
+    await writer.write_bulk_string(response)
