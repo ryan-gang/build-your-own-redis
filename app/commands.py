@@ -361,19 +361,17 @@ async def handle_xrange(writer: RESPWriter, msg: list[str]):
 
 
 async def handle_xread(writer: RESPWriter, msg: list[str]):
-    stream_key = msg[2]
-    stream_entry_id_start = msg[3]
+    stream_count = len(msg[2:]) // 2
+    response = []
 
-    stream = streams.get(stream_key, [])  # Handle case where it is empty
-    stream_keys = sorted(list(stream.keys()))
+    for op in range(stream_count):
+        stream_key = msg[2 + op]
+        stream_entry_id_start = msg[2 + stream_count + op]
+        print(op, stream_key, stream_entry_id_start)
+        output = _xread_on_single_stream(stream_key, stream_entry_id_start)
+        response.append(output)
 
-    start_idx = bisect.bisect_left(stream_keys, stream_entry_id_start)
-    end_idx = len(stream_keys) - 1
-
-    entries = _fetch_stream_entries(stream, stream_keys, start_idx, end_idx)
-    output = _format_fetched_stream_entries_for_xread(entries, stream_key)
-
-    await writer.write_array([output])
+    await writer.write_array(response)
 
 
 def _fetch_stream_entries(
@@ -425,3 +423,15 @@ def _format_fetched_stream_entries_for_xread(
         output.append(inner)
 
     return [stream_key, output]
+
+
+def _xread_on_single_stream(stream_key: str, stream_entry_id_start: str):
+    stream = streams.get(stream_key, [])  # Handle case where it is empty
+    stream_keys = sorted(list(stream.keys()))
+
+    start_idx = bisect.bisect_left(stream_keys, stream_entry_id_start)
+    end_idx = len(stream_keys) - 1
+
+    entries = _fetch_stream_entries(stream, stream_keys, start_idx, end_idx)
+    output = _format_fetched_stream_entries_for_xread(entries, stream_key)
+    return output
