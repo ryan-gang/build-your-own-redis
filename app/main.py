@@ -7,7 +7,8 @@ from collections import deque
 from app.commands import (handle_config_get, handle_echo, handle_get,
                           handle_info, handle_list_keys, handle_ping,
                           handle_psync, handle_rdb_transfer, handle_replconf,
-                          handle_set, handle_wait, init_rdb_parser)
+                          handle_set, handle_type, handle_wait,
+                          init_rdb_parser)
 from app.expiry import actively_expire_keys
 from app.replication import datastore, propagate_commands, replica_tasks
 from app.resp import RESPReader, RESPWriter
@@ -56,6 +57,8 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 await handle_ping(writer)
             case "ECHO":
                 await handle_echo(writer, msg)
+            case "TYPE":
+                await handle_type(writer, msg, datastore)
             case "SET":
                 await handle_set(writer, msg, datastore)
                 resp = await writer.serialize_array(msg)
@@ -78,7 +81,9 @@ async def handler(stream_reader: StreamReader, stream_writer: StreamWriter):
                 return
             case "WAIT":
                 async with lock:
-                    await handle_wait(writer, replicas, replication_offset, msg)
+                    await handle_wait(
+                        writer, replicas, replication_offset, msg
+                    )
             case _:
                 print(f"Unknown command received : {command}")
                 return
@@ -89,11 +94,15 @@ async def main():
     parser.add_argument(
         "--dir", type=str, help="The directory where RDB files are stored"
     )
-    parser.add_argument("--dbfilename", type=str, help="The name of the RDB file")
+    parser.add_argument(
+        "--dbfilename", type=str, help="The name of the RDB file"
+    )
     parser.add_argument(
         "--port", type=str, help="The port to which this instance will bind"
     )
-    parser.add_argument("--replicaof", nargs=2, help="Specify the host and port")
+    parser.add_argument(
+        "--replicaof", nargs=2, help="Specify the host and port"
+    )
 
     args = parser.parse_args()
 
@@ -115,7 +124,9 @@ async def main():
         global role
         role = "slave"
         master_host, master_port = args.replicaof
-        reader, writer = await asyncio.open_connection(master_host, master_port)
+        reader, writer = await asyncio.open_connection(
+            master_host, master_port
+        )
         asyncio.create_task(replica_tasks(reader, writer))
     else:
         asyncio.create_task(propagate_commands(replication_buffer, replicas))

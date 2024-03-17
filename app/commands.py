@@ -4,7 +4,7 @@ import os
 import random
 import string
 import time
-
+from typing import Any
 from app.expiry import (
     EXPIRY_TIMESTAMP_DEFAULT_VAL,
     check_key_expiration,
@@ -12,6 +12,17 @@ from app.expiry import (
 )
 from app.rdb import RDBParser
 from app.resp import RESPReader, RESPWriter
+
+type_mapping = {
+    "str": "string",
+    "int": "integer",
+    "float": "float",
+    "list": "list",
+    "dict": "hash",
+    "set": "set",
+    "bool": "boolean",
+    "NoneType": "none",
+}
 
 
 async def handle_ping(writer: RESPWriter):
@@ -37,6 +48,26 @@ async def handle_echo(writer: RESPWriter, msg: list[str]):
     await writer.write_bulk_string(response)
 
 
+async def handle_type(
+    writer: RESPWriter, msg: list[str], datastore: dict[str, tuple[Any, int]]
+):
+    """
+    Handles the TYPE command from the Redis client.
+    This function extracts the message to echo from the second element of the
+    `msg` list and writes it back to the client using the `write_bulk_string`
+    method.
+    """
+    key = msg[1]
+    value, _ = datastore.get(key, (None, None))
+    if value is None:
+        type_name = "none"
+    else:
+        type_name = (type(value)).__name__
+    print(key, value, type_name, type_mapping.get(type_name, "none"))
+    response = type_mapping.get(type_name, "none")
+    await writer.write_simple_string(response)
+
+
 async def handle_set(
     writer: RESPWriter, msg: list[str], DATASTORE: dict[str, tuple[str, int]]
 ):
@@ -45,9 +76,12 @@ async def handle_set(
 
     This function performs the following actions:
     * Extracts the key and value from the `msg` list.
-    * Checks if an optional TTL (time-to-live) is provided, else sets a default placeholder.
-    * Updates the `DATASTORE` dictionary with the new key-value pair and expiry timestamp.
-    * Writes the "OK" response to the client using the `write_simple_string` method.
+    * Checks if an optional TTL (time-to-live) is provided, else sets a default
+      placeholder.
+    * Updates the `DATASTORE` dictionary with the new key-value pair and expiry
+      timestamp.
+    * Writes the "OK" response to the client using the `write_simple_string`
+      method.
     """
     key, value = msg[1], msg[2]
     DATASTORE[key] = (value, get_expiry_timestamp(msg))
@@ -68,8 +102,8 @@ async def handle_get(
           function.
         * If not expired, returns the value to the client using the
           `write_bulk_string` method.
-        * If expired, passively removes the key from the `DATASTORE` and returns
-          a null bulk string to the client.
+        * If expired, passively removes the key from the `DATASTORE` and
+          returns a null bulk string to the client.
     * If the key doesn't exist, returns a null bulk string to the client.
     """
     key = msg[1]
@@ -81,7 +115,9 @@ async def handle_get(
     await writer.write_bulk_string(value)
 
 
-async def handle_config_get(writer: RESPWriter, msg: list[str], CONFIG: dict[str, str]):
+async def handle_config_get(
+    writer: RESPWriter, msg: list[str], CONFIG: dict[str, str]
+):
     """
     Handles the CONFIG GET command from the Redis client.
 
@@ -99,8 +135,8 @@ async def handle_list_keys(
     """
     Handles the KEYS * command from the Redis client.
 
-    This function retrieves the list of all keys from the DATASTORE and sends it
-    back to the client as an RESP array.
+    This function retrieves the list of all keys from the DATASTORE and sends
+    it back to the client as an RESP array.
     """
     key = msg[1]
     assert key == "*"
@@ -116,7 +152,7 @@ async def handle_info(writer: RESPWriter, msg: list[str], role: str):
     response = f"{header}\r\nrole:{role}"
     if role == "master":
         response += f"\r\nmaster_replid:{generate_random_string(40)}"
-        response += f"\r\nmaster_repl_offset:0"
+        response += "\r\nmaster_repl_offset:0"
 
     await writer.write_bulk_string(response)
 
@@ -141,7 +177,12 @@ async def handle_rdb_transfer(writer: RESPWriter, msg: list[str]):
     """
     Handles the REPLCONF command from the Redis client.
     """
-    hex_str = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+    hex_str = (
+        "524544495330303131fa0972656469732d76657205372e322e30"
+        "fa0a72656469732d62697473c040fa056374696d65c26d08bc65"
+        "fa08757365642d6d656dc2b0c41000fa08616f662d62617365c0"
+        "00fff06e3bfec0ff5aa2"
+    )
 
     try:
         # Decode the hex string to bytes
@@ -218,6 +259,5 @@ def init_rdb_parser(
 
 
 def generate_random_string(length: int) -> str:
-    letters_and_digits = string.ascii_lowercase + string.digits
-    result_str = "".join(random.choice(letters_and_digits) for _ in range(length))
-    return result_str
+    chars = string.ascii_lowercase + string.digits
+    return "".join(random.choice(chars) for _ in range(length))

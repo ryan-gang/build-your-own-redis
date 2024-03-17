@@ -1,10 +1,11 @@
 from asyncio import IncompleteReadError, StreamReader, StreamWriter, sleep
 from collections import deque
+from typing import Any
 
 from app.expiry import get_expiry_timestamp
 from app.resp import RESPReader, RESPWriter
 
-datastore: dict[str, tuple[str, int]] = {}  # key -> (value, expiry_timestamp)
+datastore: dict[str, tuple[Any, int]] = {}  # key -> (value, expiry_timestamp)
 
 
 async def replication_handshake(reader: RESPReader, writer: RESPWriter):
@@ -36,7 +37,8 @@ async def replication_handshake(reader: RESPReader, writer: RESPWriter):
 
 
 async def propagate_commands(
-    replication_buffer: deque[str], replicas: list[tuple[RESPReader, RESPWriter]]
+    replication_buffer: deque[str],
+    replicas: list[tuple[RESPReader, RESPWriter]],
 ):
     WAIT_TIME = 0.125  # seconds
     while True:
@@ -70,9 +72,13 @@ async def replica_tasks(
         match command:
             case "SET":
                 key, value = msg[1], msg[2]
-                datastore[key] = (value, get_expiry_timestamp([]))  # No active expiry
+                datastore[key] = (
+                    value,
+                    get_expiry_timestamp([]),
+                )  # No active expiry
             case "REPLCONF":
-                # Master won't send any other REPLCONF message apart from GETACK.
+                # Master won't send any other REPLCONF message apart from
+                # GETACK.
                 response = ["REPLCONF", "ACK", str(offset)]
                 await writer.write_array(response)
             case _:
